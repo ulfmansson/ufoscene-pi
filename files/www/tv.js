@@ -1,0 +1,177 @@
+// The TV page: runs ufoscene in a same-origin iframe and drives it with the same keys a
+// keyboard would send, on commands from the phone remote (server-sent events from server.py).
+
+const $ = (id) => document.getElementById(id);
+const frame = $('ufo');
+const overlay = $('connect');
+const fpsBox = $('fps');
+const toast = $('toast');
+
+const CONNECT_SHOW_MS = 90_000;
+const MIN_FPS = 25; // the bar a Pi model has to clear to be supported
+
+// First run: skip ufoscene's setup guide, use the radio, and steady 30 fps TV mode.
+const seed = { 'ufo.guided': '1', 'ufo.tv': '1' };
+for (const [k, v] of Object.entries(seed)) if (localStorage.getItem(k) === null) localStorage.setItem(k, v);
+if (!localStorage.getItem('ufo.audio')) localStorage.setItem('ufo.audio', 'radio');
+
+function say(text, ms = 3000) {
+  toast.textContent = text;
+  toast.style.opacity = 1;
+  clearTimeout(say.t);
+  say.t = setTimeout(() => (toast.style.opacity = 0), ms);
+}
+
+const win = () => frame.contentWindow;
+function key(k) {
+  win()?.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+}
+const running = () => win()?.document.body.classList.contains('running');
+const ufo = () => win()?.ufo;
+
+// ufoscene starts from its panel with Enter; once the page is up, start it.
+frame.addEventListener('load', () => {
+  const tryStart = (n) => {
+    if (ufo()?.ex) {
+      if (!running()) key('Enter');
+    } else if (n > 0) setTimeout(() => tryStart(n - 1), 500);
+  };
+  setTimeout(() => tryStart(40), 800);
+});
+
+// ------------------------------------------------------------ connect overlay
+
+async function showConnect(ms = CONNECT_SHOW_MS) {
+  try {
+    const s = await (await fetch('/api/state')).json();
+    $('url-mdns').textContent = s.urls.mdns;
+    $('url-ip').textContent = s.urls.ip ? `or ${s.urls.ip}` : '';
+    $('qr').src = `/api/qr.svg?text=${encodeURIComponent(s.urls.ip || s.urls.mdns)}`;
+  } catch {}
+  overlay.hidden = false;
+  clearTimeout(showConnect.t);
+  if (ms) showConnect.t = setTimeout(() => (overlay.hidden = true), ms);
+}
+
+// ------------------------------------------------------------ audio sources
+
+// 'spotify' is the Pi's own Spotify Connect speaker: its sound is captured from the
+// audio output's monitor, which ufoscene sees as a microphone.
+function setAudio(source) {
+  const kind = source === 'radio' ? 'radio' : 'mic';
+  localStorage.setItem('ufo.audio', kind);
+  localStorage.setItem('ufopi.audio', source);
+  // ufoscene picks up a new source on Start: open the panel and start again
+  if (running()) key('p');
+  setTimeout(() => key('Enter'), 300);
+  say(source === 'radio' ? 'Internet radio' : source === 'spotify' ? 'Spotify' : 'Microphone / line in');
+  report({ audio: source });
+}
+
+// ------------------------------------------------------------ self-test
+
+let selftest = false;
+let frames = 0;
+let lastFps = null;
+function countFrames() {
+  frames++;
+  (win() || window).requestAnimationFrame(countFrames);
+}
+requestAnimationFrame(countFrames);
+setInterval(() => {
+  lastFps = frames / 5;
+  frames = 0;
+  if (selftest) {
+    fpsBox.textContent = `${lastFps.toFixed(0)} fps`;
+    fpsBox.className = lastFps >= MIN_FPS ? '' : lastFps >= MIN_FPS * 0.8 ? 'slow' : 'bad';
+  }
+  report({ fps: lastFps, demo: currentDemo() });
+}, 5000);
+
+function currentDemo() {
+  const u = ufo();
+  try {
+    return u?.ex ? u.ex.ufo_current_demo(u.demo) + 1 : null;
+  } catch {
+    return null;
+  }
+}
+
+function report(state) {
+  fetch('/api/state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state) }).catch(() => {});
+}
+
+// ------------------------------------------------------------ commands
+
+const KEYS = {
+  next: 'ArrowRight',
+  prev: 'ArrowLeft',
+  random: 'r',
+  scene: 'n',
+  'song-next': ' ',
+  'song-prev': 'b',
+  hud: 'h',
+  tv: 't',
+  panel: 'p',
+  start: 'Enter',
+};
+
+function handle({ cmd, arg }) {
+  if (KEYS[cmd]) {
+    if (cmd === 'song-next' && !running()) key('Enter'); // Space on the panel would only start
+    else key(KEYS[cmd]);
+    return;
+  }
+  switch (cmd) {
+    case 'demo': {
+      const u = ufo();
+      if (u?.ex) {
+        u.ex.ufo_set_demo(u.demo, arg - 1);
+        if (!running()) key('Enter');
+      }
+      break;
+    }
+    case 'audio':
+      setAudio(arg);
+      break;
+    case 'overlay':
+      if (overlay.hidden) showConnect(0);
+      else overlay.hidden = true;
+      break;
+    case 'selftest':
+      selftest = !selftest;
+      fpsBox.hidden = !selftest;
+      say(selftest ? `Self-test: needs ${MIN_FPS} fps or more` : 'Self-test off');
+      break;
+    case 'spotify':
+      // now playing on the Spotify Connect speaker: tell the demo, switch to it if needed
+      if (arg?.artist || arg?.title) {
+        try {
+          ufo()?.sendTrack?.(arg.artist || '', arg.title || '');
+        } catch {}
+      }
+      if (arg?.playing && localStorage.getItem('ufopi.audio') !== 'spotify') setAudio('spotify');
+      break;
+    case 'reload':
+      location.reload();
+      break;
+  }
+}
+
+function listen() {
+  const es = new EventSource('/api/events');
+  es.onmessage = (e) => {
+    try {
+      handle(JSON.parse(e.data));
+    } catch (err) {
+      console.warn(err);
+    }
+  };
+  es.onerror = () => {
+    es.close();
+    setTimeout(listen, 3000);
+  };
+}
+
+listen();
+showConnect();

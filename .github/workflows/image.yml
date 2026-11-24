@@ -1,0 +1,97 @@
+name: Build
+
+# Every push and PR runs the tests. A tag v* also builds the SD-card images and publishes a
+# release: images, os_list.json for Raspberry Pi Imager, and the bundle install.sh downloads.
+# "Run workflow" builds the images without publishing (they appear as run artifacts).
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Server tests
+        run: |
+          sudo apt-get install -y -qq python3-qrcode
+          python3 -m unittest discover -s tests -v
+      - name: Shell scripts
+        run: shellcheck -S warning install.sh files/kiosk.sh image/build.sh image/make_bundle.sh
+
+  bundle:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: ulfmansson/ufoscene
+          path: ufoscene
+      - name: Build ufoscene (WebAssembly)
+        working-directory: ufoscene
+        run: |
+          rustup target add wasm32-unknown-unknown
+          cargo build -p ufo-demo --release --target wasm32-unknown-unknown
+      - name: Pack the bundle
+        run: |
+          VERSION=${GITHUB_REF_NAME}
+          [[ "$GITHUB_REF_TYPE" == tag ]] || VERSION="dev-${GITHUB_SHA::7}"
+          image/make_bundle.sh ufoscene ufoscene-pi-bundle.tar.gz "$VERSION"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle
+          path: ufoscene-pi-bundle.tar.gz
+
+  image:
+    needs: bundle
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, armhf]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: bundle
+      - name: Tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq parted e2fsprogs xz-utils qemu-user-static binfmt-support
+      - name: Build the image
+        run: sudo image/build.sh ${{ matrix.arch }} ufoscene-pi-bundle.tar.gz ufoscene-${{ matrix.arch }}.img.xz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-${{ matrix.arch }}
+          path: ufoscene-${{ matrix.arch }}.img.xz
+          compression-level: 0
+
+  release:
+    needs: image
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Image list for Raspberry Pi Imager
+        run: python3 image/os_list.py "$GITHUB_REF_NAME" out > out/os_list.json && cat out/os_list.json
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --title "ufoscene-pi $GITHUB_REF_NAME" --generate-notes \
+            out/ufoscene-arm64.img.xz out/ufoscene-armhf.img.xz out/os_list.json out/ufoscene-pi-bundle.tar.gz

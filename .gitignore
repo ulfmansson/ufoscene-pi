@@ -1,0 +1,5 @@
+*.img
+*.img.xz
+*.tar.gz
+__pycache__/
+.DS_Store

@@ -1,0 +1,44 @@
+:root { color-scheme: dark; --c1: #0af; --c2: #f0f; --c3: #ff0; --bg: #000022; }
+* { box-sizing: border-box; }
+body {
+  margin: 0; min-height: 100vh; background: var(--bg); color: #eee;
+  font: 17px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
+header {
+  text-align: center; padding: 18px 12px 10px;
+  background: linear-gradient(#300, #a40, #fd0, #a40, #300) top / 100% 6px no-repeat,
+              linear-gradient(#003, #04a, #0ef, #04a, #003) bottom / 100% 6px no-repeat;
+}
+h1 {
+  margin: 4px 0; font: 900 2rem/1 ui-monospace, "DejaVu Sans Mono", monospace; letter-spacing: .35rem;
+  background: linear-gradient(var(--c3), #f80, var(--c2), var(--c1)); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+h2 { margin: 22px 0 8px; font-size: .85rem; text-transform: uppercase; letter-spacing: .15rem; color: #8af; }
+.status { margin: 0; font-size: .85rem; color: #aaa; }
+.status.ok { color: #6f6; }
+.status.bad { color: #f66; }
+main { max-width: 480px; margin: 0 auto; padding: 8px 16px 24px; }
+
+button {
+  font: inherit; color: #fff; background: #113; border: 2px solid var(--c1); border-radius: 10px;
+  padding: 14px 10px; min-height: 52px; touch-action: manipulation; cursor: pointer;
+}
+button:active { background: var(--c1); color: #000; transform: translateY(1px); }
+button:focus-visible { outline: 3px solid var(--c3); outline-offset: 2px; }
+
+.pad { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 14px; }
+.pad button { font-size: 2rem; min-height: 88px; border-color: var(--c2); }
+.row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+#jump { grid-template-columns: auto 1fr auto; align-items: center; }
+#jump label { color: #aaa; }
+input {
+  font: inherit; color: #fff; background: #002; border: 2px solid #446; border-radius: 10px; padding: 12px; width: 100%;
+}
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.seg button[aria-checked="true"] { background: var(--c3); color: #000; border-color: var(--c3); font-weight: 700; }
+.hint { color: #aaa; font-size: .9rem; margin: 8px 2px; }
+.hint b { color: var(--c3); }
+footer { text-align: center; color: #667; font-size: .8rem; padding: 20px; }
+footer a { color: #8af; }
+@media (prefers-reduced-motion: reduce) { button:active { transform: none; } }

@@ -1,0 +1,18 @@
+[Unit]
+Description=ufoscene Spotify Connect speaker "UFOSCENE" (librespot)
+After=network-online.target sound.target user@@KUID@.service
+Wants=network-online.target
+
+[Service]
+User=@USER@
+Environment=XDG_RUNTIME_DIR=/run/user/@KUID@
+Environment=PULSE_SERVER=unix:/run/user/@KUID@/pulse/native
+ExecStart=/usr/bin/librespot --name UFOSCENE --device-type speaker --backend @BACKEND@ \
+  --bitrate 160 --initial-volume 80 --enable-volume-normalisation \
+  --cache /var/cache/ufoscene-spotify --disable-audio-cache \
+  --onevent @PREFIX@/spotify-event.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

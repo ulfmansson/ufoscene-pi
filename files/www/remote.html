@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000022">
+<title>ufoscene remote</title>
+<link rel="stylesheet" href="/static/remote.css">
+<script type="module" src="/static/remote.js"></script>
+</head>
+<body>
+<header>
+  <h1>UFOSCENE</h1>
+  <p id="status" class="status">connecting…</p>
+</header>
+
+<main>
+  <section class="pad" aria-label="Demos">
+    <button data-cmd="prev" aria-label="Previous demo">◀</button>
+    <button data-cmd="random" aria-label="Random demo">⟳</button>
+    <button data-cmd="next" aria-label="Next demo">▶</button>
+  </section>
+
+  <section class="row">
+    <button data-cmd="scene">Next part</button>
+    <button data-cmd="song-prev">⏮ Song</button>
+    <button data-cmd="song-next">Song ⏭</button>
+  </section>
+
+  <form id="jump" class="row">
+    <label for="demo-no">Demo #</label>
+    <input id="demo-no" type="number" inputmode="numeric" min="1" max="100" placeholder="1–100">
+    <button type="submit">Go</button>
+  </form>
+
+  <h2>Music</h2>
+  <section class="seg" role="radiogroup" aria-label="Music">
+    <button data-audio="radio">Radio</button>
+    <button data-audio="spotify">Spotify</button>
+    <button data-audio="mic">Mic / line in</button>
+  </section>
+  <p class="hint" id="spotify-hint">Spotify: in the Spotify app, pick the speaker <b>UFOSCENE</b>. Premium needed.</p>
+  <p class="hint" id="nowplaying"></p>
+
+  <h2>Screen</h2>
+  <section class="row">
+    <button data-cmd="hud">Info</button>
+    <button data-cmd="tv">TV mode</button>
+    <button data-cmd="overlay">QR code</button>
+  </section>
+  <section class="row">
+    <button data-cmd="panel">Settings</button>
+    <button data-cmd="selftest">Self-test</button>
+    <button data-cmd="reload">Reload</button>
+  </section>
+  <p class="hint" id="fps"></p>
+</main>
+
+<footer>
+  <a href="https://ufoscene.net/">ufoscene.net</a> · ufoscene-pi <span id="version"></span>
+</footer>
+</body>
+</html>

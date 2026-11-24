@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ufoscene</title>
+<link rel="stylesheet" href="/static/tv.css">
+<script type="module" src="/static/tv.js"></script>
+</head>
+<body>
+<iframe id="ufo" src="/ufo/" allow="autoplay; microphone; fullscreen"></iframe>
+
+<!-- Shown at boot and on request from the phone: how to take control. -->
+<section id="connect" class="overlay" hidden>
+  <div class="card">
+    <img id="qr" alt="" width="220" height="220">
+    <div>
+      <h1>UFOSCENE</h1>
+      <p class="big">Control me from your phone</p>
+      <p>Scan the code, or open<br><b id="url-mdns"></b><br><span id="url-ip"></span></p>
+      <p class="small">Spotify: pick the speaker <b>UFOSCENE</b> in the Spotify app.</p>
+    </div>
+  </div>
+</section>
+
+<div id="fps" hidden></div>
+<div id="toast"></div>
+</body>
+</html>

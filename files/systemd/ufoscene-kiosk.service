@@ -1,0 +1,26 @@
+[Unit]
+Description=ufoscene on the TV (cage + Chromium on tty1)
+After=systemd-user-sessions.service ufoscene-server.service user@@KUID@.service
+Wants=ufoscene-server.service
+Conflicts=getty@tty1.service
+
+[Service]
+User=@USER@
+PAMName=login
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty-fail
+StandardOutput=journal
+StandardError=journal
+UtmpIdentifier=tty1
+UtmpMode=user
+Environment=XDG_RUNTIME_DIR=/run/user/@KUID@
+WorkingDirectory=/home/@USER@
+ExecStart=/usr/bin/cage -d -s -- @PREFIX@/kiosk.sh
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
