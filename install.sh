@@ -105,6 +105,10 @@ rm -rf "$PREFIX.old"
 
 mkdir -p /var/cache/ufoscene-spotify && chown "$KIOSK_USER:" /var/cache/ufoscene-spotify
 
+# sound through HDMI (the TV) before the headphone jack
+mkdir -p /etc/wireplumber/wireplumber.conf.d
+cp "$PREFIX/wireplumber/51-ufoscene-hdmi.conf" /etc/wireplumber/wireplumber.conf.d/
+
 for unit in "$PREFIX"/systemd/*.service; do
   sed -e "s/@KUID@/$KUID/g" -e "s/@USER@/$KIOSK_USER/g" -e "s#@PREFIX@#$PREFIX#g" "$unit" \
     > "/etc/systemd/system/$(basename "$unit")"

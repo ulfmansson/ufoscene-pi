@@ -67,6 +67,8 @@ to see what your Pi manages.
 | Pi 2 | being measured |
 | Pi 1, Zero / Zero W | too slow |
 
+The first start on a Pi 2 takes a minute or two before the demo and the music begin.
+
 ## Using it
 
 | Remote | What it does |
@@ -93,6 +95,9 @@ pick **UFOSCENE**. The Pi plays the music through the TV, and the demos follow i
 | `files/kiosk.sh`, `files/systemd/` | Chromium in kiosk mode under [cage](https://github.com/cage-kiosk/cage) on the TV, and the Spotify Connect speaker ([librespot](https://github.com/librespot-org/librespot), packaged by [raspotify](https://github.com/dtcooper/raspotify)) |
 | `image/` | builds the SD-card images from Raspberry Pi OS Lite, plus the image list for Imager |
 
+Sound goes to the TV over HDMI: a WirePlumber rule (`files/wireplumber/`) puts HDMI ahead of the
+3.5 mm jack, which is still used when the screen has no speakers.
+
 When the music comes from Spotify or the mic, PipeWire's default input is pointed at the right
 place: for Spotify, the monitor of the TV output. ufoscene's microphone mode then hears it.
 
@@ -100,6 +105,13 @@ Troubleshooting over SSH:
 
 ```bash
 journalctl -u ufoscene-kiosk -u ufoscene-server -u ufoscene-spotify -b
+```
+
+No sound? See where it goes (the HDMI one should be the default):
+
+```bash
+sudo -u ufo XDG_RUNTIME_DIR=/run/user/$(id -u ufo) pactl list short sinks
+sudo -u ufo XDG_RUNTIME_DIR=/run/user/$(id -u ufo) pactl get-default-sink
 ```
 
 ## Development

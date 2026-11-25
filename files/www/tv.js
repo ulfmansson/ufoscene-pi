@@ -29,15 +29,17 @@ function key(k) {
 const running = () => win()?.document.body.classList.contains('running');
 const ufo = () => win()?.ufo;
 
-// ufoscene starts from its panel with Enter; once the page is up, start it.
+// ufoscene starts from its panel with Enter; once the page is up, start it. Compiling its
+// WebAssembly takes well over 20 s on a Pi 2, so wait for it for up to 10 minutes.
 frame.addEventListener('load', () => {
-  const tryStart = (n) => {
-    if (ufo()?.ex) {
-      if (!running()) key('Enter');
-    } else if (n > 0) setTimeout(() => tryStart(n - 1), 500);
-  };
-  setTimeout(() => tryStart(40), 800);
+  clearTimeout(tryStart.t);
+  tryStart(600);
 });
+function tryStart(n) {
+  if (ufo()?.ex) {
+    if (!running()) key('Enter');
+  } else if (n > 0) tryStart.t = setTimeout(() => tryStart(n - 1), 1000);
+}
 
 // ------------------------------------------------------------ connect overlay
 
@@ -73,9 +75,11 @@ function setAudio(source) {
 let selftest = false;
 let frames = 0;
 let lastFps = null;
+// Counted on this page, not the iframe: a frame callback left with the iframe's document is
+// dropped when ufoscene reloads, and the count would stay at 0 for good.
 function countFrames() {
   frames++;
-  (win() || window).requestAnimationFrame(countFrames);
+  requestAnimationFrame(countFrames);
 }
 requestAnimationFrame(countFrames);
 setInterval(() => {
