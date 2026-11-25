@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
 # ufoscene-pi installer: turns Raspberry Pi OS Lite (Trixie or Bookworm, 32- or 64-bit) into a
 # ufoscene box. It boots straight into ufoscene on the TV, takes a phone remote at
-# http://<hostname>.local/, and shows up in the Spotify app as the speaker "UFOSCENE".
+# http://<hostname>.local/, and is a speaker called "UFOSCENE" for phones over Bluetooth and AirPlay.
 #
 # On a Pi that already runs Raspberry Pi OS Lite:
 #   curl -fsSL https://raw.githubusercontent.com/ulfmansson/ufoscene-pi/main/install.sh | sudo bash
+#
+# The remote can change the Pi's Wi-Fi, and with no Wi-Fi it opens a setup network (NetworkManager).
 #
 # The image build runs the same script inside the image (--image).
 #
 # Options:
 #   --image          building an image in a chroot: enable services but do not start anything
 #   --bundle FILE    use this ufoscene-pi-bundle.tar.gz instead of downloading the latest release
-#   --no-spotify     skip the Spotify Connect speaker
+#   --bundle-url URL download the bundle from here instead, e.g. a pre-release to try out
 set -euo pipefail
 
 REPO="ulfmansson/ufoscene-pi"
@@ -21,12 +23,11 @@ KIOSK_USER=ufo
 
 IMAGE=0
 BUNDLE=""
-SPOTIFY=1
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --image) IMAGE=1 ;;
     --bundle) BUNDLE="$2"; shift ;;
-    --no-spotify) SPOTIFY=0 ;;
+    --bundle-url) BUNDLE_URL="$2"; shift ;;
     -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
@@ -62,21 +63,30 @@ CHROMIUM=chromium
 apt-cache show chromium >/dev/null 2>&1 || CHROMIUM=chromium-browser
 apt-get install -y -qq --no-install-recommends \
   cage "$CHROMIUM" \
-  pipewire pipewire-pulse wireplumber pulseaudio-utils \
-  python3 python3-qrcode avahi-daemon libnss-mdns \
+  pipewire pipewire-pulse wireplumber pulseaudio-utils libspa-0.2-bluetooth rtkit \
+  bluez python3-dbus python3-gi shairport-sync \
+  python3 python3-qrcode avahi-daemon libnss-mdns iw \
   fonts-dejavu-core curl ca-certificates
+# the Pi 3 and 4 radio needs Raspberry Pi's Bluetooth helper (already in Raspberry Pi OS)
+if apt-cache show pi-bluetooth >/dev/null 2>&1; then apt-get install -y -qq --no-install-recommends pi-bluetooth; fi
+# the Wi-Fi setup network: NetworkManager shares it with dnsmasq (Raspberry Pi OS since Bookworm)
+if dpkg -s network-manager >/dev/null 2>&1; then apt-get install -y -qq --no-install-recommends dnsmasq-base; fi
+# shairport-sync's own service plays as its own user; ours plays into the kiosk user's PipeWire
+systemctl disable --now shairport-sync.service >/dev/null 2>&1 || true
+systemctl mask shairport-sync.service >/dev/null 2>&1 || true
 
-if [[ $SPOTIFY -eq 1 ]]; then
-  say "Installing the Spotify Connect speaker (librespot from raspotify)"
-  curl -fsSL https://dtcooper.github.io/raspotify/key.asc -o /usr/share/keyrings/raspotify_key.asc
-  echo "deb [signed-by=/usr/share/keyrings/raspotify_key.asc] https://dtcooper.github.io/raspotify raspotify main" \
-    > /etc/apt/sources.list.d/raspotify.list
-  apt-get update -qq
-  apt-get install -y -qq raspotify
-  # raspotify's own service plays straight to ALSA as its own user; ours plays into the kiosk
-  # user's PipeWire so ufoscene can listen to it.
-  systemctl disable raspotify.service >/dev/null 2>&1 || true
-  systemctl mask raspotify.service >/dev/null 2>&1 || true
+# Up to 0.1: a Spotify Connect speaker (librespot). Spotify no longer gives librespot the keys
+# to play with (librespot-org/librespot#1649), so phones play over Bluetooth or AirPlay instead.
+if [[ -f /etc/systemd/system/ufoscene-spotify.service ]]; then
+  say "Removing the Spotify Connect speaker (Spotify stopped working with it)"
+  systemctl disable --now ufoscene-spotify.service >/dev/null 2>&1 || true
+  rm -f /etc/systemd/system/ufoscene-spotify.service
+  rm -rf /var/cache/ufoscene-spotify
+fi
+if dpkg -s raspotify >/dev/null 2>&1; then
+  systemctl unmask raspotify.service >/dev/null 2>&1 || true
+  apt-get purge -y -qq raspotify
+  rm -f /etc/apt/sources.list.d/raspotify.list /usr/share/keyrings/raspotify_key.asc
 fi
 
 # ------------------------------------------------------------------ user
@@ -85,7 +95,7 @@ if ! id "$KIOSK_USER" >/dev/null 2>&1; then
   useradd --system --create-home --home-dir /home/$KIOSK_USER --shell /bin/bash "$KIOSK_USER"
   passwd -l "$KIOSK_USER" >/dev/null
 fi
-for g in video render input audio; do getent group $g >/dev/null && usermod -aG $g "$KIOSK_USER"; done
+for g in video render input audio bluetooth; do getent group $g >/dev/null && usermod -aG $g "$KIOSK_USER"; done
 KUID=$(id -u "$KIOSK_USER")
 # a user manager (and so PipeWire) from boot, before anyone logs in
 mkdir -p /var/lib/systemd/linger && touch /var/lib/systemd/linger/$KIOSK_USER
@@ -97,32 +107,44 @@ mkdir -p "$PREFIX.new"
 cp -r "$WORK/files/." "$PREFIX.new/"
 cp -r "$WORK/ufo" "$PREFIX.new/ufo"
 [[ -f "$WORK/VERSION" ]] && cp "$WORK/VERSION" "$PREFIX.new/VERSION"
-chmod 755 "$PREFIX.new/server.py" "$PREFIX.new/kiosk.sh" "$PREFIX.new/spotify-event.py"
+chmod 755 "$PREFIX.new/server.py" "$PREFIX.new/kiosk.sh" "$PREFIX.new/phone.py" "$PREFIX.new/wifi.py"
 rm -rf "$PREFIX.old"
 [[ -d "$PREFIX" ]] && mv "$PREFIX" "$PREFIX.old"
 mv "$PREFIX.new" "$PREFIX"
 rm -rf "$PREFIX.old"
 
-mkdir -p /var/cache/ufoscene-spotify && chown "$KIOSK_USER:" /var/cache/ufoscene-spotify
+# the phone speaker: AirPlay settings, BlueZ access for phone.py, and a speaker icon on phones
+mkdir -p /etc/ufoscene
+sed "s/@KUID@/$KUID/g" "$PREFIX/shairport-sync.conf" > /etc/ufoscene/shairport-sync.conf
+sed "s/@USER@/$KIOSK_USER/g" "$PREFIX/dbus/ufoscene-bluetooth.conf" > /etc/dbus-1/system.d/ufoscene-bluetooth.conf
+# a Last.fm API key built into the bundle, for song names (the remote can set its own)
+if [[ -f "$PREFIX/lastfm-api-key" ]]; then install -m 644 "$PREFIX/lastfm-api-key" /etc/ufoscene/lastfm-api-key; fi
+if [[ -f /etc/bluetooth/main.conf ]]; then
+  # major class audio/video, minor loudspeaker
+  sed -i -E 's/^#? *Class *=.*/Class = 0x000414/' /etc/bluetooth/main.conf
+  grep -q '^Class = 0x000414' /etc/bluetooth/main.conf || sed -i '/^\[General\]/a Class = 0x000414' /etc/bluetooth/main.conf
+fi
 
-# sound through HDMI (the TV) before the headphone jack
+# the Wi-Fi setup network sends phones to the remote
+if [[ -d /etc/NetworkManager ]]; then
+  mkdir -p /etc/NetworkManager/dnsmasq-shared.d
+  cp "$PREFIX/networkmanager/ufoscene-setup.conf" /etc/NetworkManager/dnsmasq-shared.d/ufoscene-setup.conf
+fi
+
+# sound through HDMI (the TV) before the headphone jack, at full volume
 mkdir -p /etc/wireplumber/wireplumber.conf.d
-cp "$PREFIX/wireplumber/51-ufoscene-hdmi.conf" /etc/wireplumber/wireplumber.conf.d/
+cp "$PREFIX"/wireplumber/*.conf /etc/wireplumber/wireplumber.conf.d/
 
 for unit in "$PREFIX"/systemd/*.service; do
   sed -e "s/@KUID@/$KUID/g" -e "s/@USER@/$KIOSK_USER/g" -e "s#@PREFIX@#$PREFIX#g" "$unit" \
     > "/etc/systemd/system/$(basename "$unit")"
 done
 
-BACKEND=alsa
-if [[ $SPOTIFY -eq 1 ]] && librespot --backend '?' 2>&1 | grep -qi pulseaudio; then BACKEND=pulseaudio; fi
-sed -i "s/@BACKEND@/$BACKEND/" /etc/systemd/system/ufoscene-spotify.service
-
 # ------------------------------------------------------------------ boot
 say "Booting straight into ufoscene"
 systemctl disable getty@tty1.service >/dev/null 2>&1 || true
-systemctl enable ufoscene-server.service ufoscene-kiosk.service avahi-daemon.service
-if [[ $SPOTIFY -eq 1 ]]; then systemctl enable ufoscene-spotify.service; else systemctl disable ufoscene-spotify.service >/dev/null 2>&1 || true; fi
+systemctl enable ufoscene-server.service ufoscene-kiosk.service avahi-daemon.service \
+  bluetooth.service ufoscene-phone.service ufoscene-airplay.service ufoscene-wifi.service
 systemctl set-default multi-user.target >/dev/null
 
 # quiet boot: no rainbow square, no console text before the demos
@@ -139,8 +161,10 @@ if [[ $IMAGE -eq 1 ]]; then
   say "Done (image mode: nothing started)"
 else
   systemctl daemon-reload
+  systemctl reload dbus.service >/dev/null 2>&1 || true
+  systemctl restart bluetooth.service >/dev/null 2>&1 || true
   systemctl restart ufoscene-server.service
-  [[ $SPOTIFY -eq 1 ]] && systemctl restart ufoscene-spotify.service || true
+  systemctl restart ufoscene-phone.service ufoscene-airplay.service ufoscene-wifi.service
   systemctl restart ufoscene-kiosk.service
   say "Done. ufoscene is starting on the TV; the remote is at http://$(hostname).local/"
 fi

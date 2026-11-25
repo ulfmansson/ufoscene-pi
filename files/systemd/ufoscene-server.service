@@ -7,6 +7,9 @@ User=@USER@
 Environment=XDG_RUNTIME_DIR=/run/user/@KUID@
 ExecStart=/usr/bin/python3 @PREFIX@/server.py --port 80 --www @PREFIX@/www --ufo @PREFIX@/ufo
 AmbientCapabilities=CAP_NET_BIND_SERVICE
+# /var/lib/ufoscene: settings from the remote (the Last.fm username)
+StateDirectory=ufoscene
+StateDirectoryMode=0700
 NoNewPrivileges=yes
 ProtectSystem=full
 PrivateTmp=yes

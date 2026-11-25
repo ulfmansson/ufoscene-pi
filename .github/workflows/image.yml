@@ -2,6 +2,7 @@ name: Build
 
 # Every push and PR runs the tests. A tag v* also builds the SD-card images and publishes a
 # release: images, os_list.json for Raspberry Pi Imager, and the bundle install.sh downloads.
+# A tag with a dash (v0.2.0-rc1) is a pre-release: "latest", and so Imager and install.sh, skip it.
 # "Run workflow" builds the images without publishing (they appear as run artifacts).
 on:
   push:
@@ -41,6 +42,9 @@ jobs:
           rustup target add wasm32-unknown-unknown
           cargo build -p ufo-demo --release --target wasm32-unknown-unknown
       - name: Pack the bundle
+        env:
+          # Settings → Secrets and variables → Actions → Variables (read-only, public anyway)
+          LASTFM_API_KEY: ${{ vars.LASTFM_API_KEY }}
         run: |
           VERSION=${GITHUB_REF_NAME}
           [[ "$GITHUB_REF_TYPE" == tag ]] || VERSION="dev-${GITHUB_SHA::7}"
@@ -93,5 +97,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --title "ufoscene-pi $GITHUB_REF_NAME" --generate-notes \
+          PRE=(); [[ "$GITHUB_REF_NAME" == *-* ]] && PRE=(--prerelease)
+          gh release create "$GITHUB_REF_NAME" "${PRE[@]}" --title "ufoscene-pi $GITHUB_REF_NAME" --generate-notes \
             out/ufoscene-arm64.img.xz out/ufoscene-armhf.img.xz out/os_list.json out/ufoscene-pi-bundle.tar.gz

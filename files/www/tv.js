@@ -7,13 +7,35 @@ const overlay = $('connect');
 const fpsBox = $('fps');
 const toast = $('toast');
 
-const CONNECT_SHOW_MS = 90_000;
+const CONNECT_SHOW_MS = 10_000; // the QR code at boot; the remote's QR code button brings it back
 const MIN_FPS = 25; // the bar a Pi model has to clear to be supported
 
 // First run: skip ufoscene's setup guide, use the radio, and steady 30 fps TV mode.
 const seed = { 'ufo.guided': '1', 'ufo.tv': '1' };
 for (const [k, v] of Object.entries(seed)) if (localStorage.getItem(k) === null) localStorage.setItem(k, v);
 if (!localStorage.getItem('ufo.audio')) localStorage.setItem('ufo.audio', 'radio');
+
+// Song names from Last.fm (set on the remote): ufoscene reads these when it starts. The key comes
+// from the server on the Pi itself, never through the remote.
+async function applyLastfm() {
+  try {
+    const lf = await (await fetch('/api/lastfm', { cache: 'no-store' })).json();
+    if (lf.user && lf.key) {
+      localStorage.setItem('ufo.songs', 'lastfm');
+      localStorage.setItem('ufo.lastfm.user', lf.user);
+      localStorage.setItem('ufo.lastfm.key', lf.key);
+      localStorage.setItem('ufopi.lastfm', '1');
+      return lf.user;
+    }
+    if (localStorage.getItem('ufopi.lastfm')) {
+      localStorage.setItem('ufo.songs', 'none');
+      localStorage.removeItem('ufopi.lastfm');
+    }
+  } catch {}
+  return '';
+}
+const lastfmOn = () => localStorage.getItem('ufo.songs') === 'lastfm';
+applyLastfm().then(() => (frame.src = '/ufo/'));
 
 function say(text, ms = 3000) {
   toast.textContent = text;
@@ -57,8 +79,8 @@ async function showConnect(ms = CONNECT_SHOW_MS) {
 
 // ------------------------------------------------------------ audio sources
 
-// 'spotify' is the Pi's own Spotify Connect speaker: its sound is captured from the
-// audio output's monitor, which ufoscene sees as a microphone.
+// 'phone' is a phone playing to the Pi over Bluetooth or AirPlay: its sound is captured from
+// the audio output's monitor, which ufoscene sees as a microphone.
 function setAudio(source) {
   const kind = source === 'radio' ? 'radio' : 'mic';
   localStorage.setItem('ufo.audio', kind);
@@ -66,7 +88,7 @@ function setAudio(source) {
   // ufoscene picks up a new source on Start: open the panel and start again
   if (running()) key('p');
   setTimeout(() => key('Enter'), 300);
-  say(source === 'radio' ? 'Internet radio' : source === 'spotify' ? 'Spotify' : 'Microphone / line in');
+  say(source === 'radio' ? 'Internet radio' : source === 'phone' ? 'Music from your phone' : 'Microphone / line in');
   report({ audio: source });
 }
 
@@ -147,19 +169,114 @@ function handle({ cmd, arg }) {
       fpsBox.hidden = !selftest;
       say(selftest ? `Self-test: needs ${MIN_FPS} fps or more` : 'Self-test off');
       break;
-    case 'spotify':
-      // now playing on the Spotify Connect speaker: tell the demo, switch to it if needed
-      if (arg?.artist || arg?.title) {
-        try {
-          ufo()?.sendTrack?.(arg.artist || '', arg.title || '');
-        } catch {}
+    case 'nowplaying': {
+      // a phone plays to the Pi (Bluetooth or AirPlay): switch to it, and tell the demo the song
+      const song = `${arg?.artist || ''}\u0000${arg?.title || ''}`;
+      if (arg?.playing && localStorage.getItem('ufopi.audio') !== 'phone') setAudio('phone');
+      // with Last.fm on, ufoscene gets the songs from there: two sources would fight over the demo
+      if ((arg?.artist || arg?.title) && song !== lastSong && !lastfmOn()) {
+        lastSong = song;
+        // after a switch ufoscene restarts its sound; give it a moment before the new song
+        setTimeout(() => {
+          try {
+            ufo()?.sendTrack?.(arg.artist || '', arg.title || '');
+          } catch {}
+        }, 1500);
       }
-      if (arg?.playing && localStorage.getItem('ufopi.audio') !== 'spotify') setAudio('spotify');
+      break;
+    }
+    case 'pair':
+      pairing(true);
+      break;
+    case 'lastfm':
+      // ufoscene picks Last.fm up when it starts: reload it (it starts itself again)
+      applyLastfm().then((user) => {
+        frame.contentWindow?.location.reload();
+        say(user ? `Song names from Last.fm: ${user}` : 'Last.fm off', 4000);
+      });
+      break;
+    case 'bluetooth':
+      if (!arg?.pairing) pairing(false);
+      if (arg?.device && arg.device !== lastDevice) say(`Connected: ${arg.device}`, 4000);
+      lastDevice = arg?.device || null;
       break;
     case 'reload':
       location.reload();
       break;
+    case 'wifi-code':
+      wifiCode();
+      break;
+    case 'wifi':
+      wifiState(arg);
+      break;
   }
+}
+
+// ------------------------------------------------------------ Wi-Fi
+
+// The code a Wi-Fi change on the remote needs. Fetched from the Pi itself, never broadcast.
+async function wifiCode() {
+  try {
+    const c = await (await fetch('/api/wifi/code', { cache: 'no-store' })).json();
+    if (!c.code) return;
+    $('wifi-code-digits').textContent = c.code;
+    $('wifi-code').hidden = false;
+    clearTimeout(wifiCode.t);
+    wifiCode.t = setTimeout(() => ($('wifi-code').hidden = true), c.seconds * 1000);
+  } catch {}
+}
+
+// QR code text to join a Wi-Fi network; \ ; , : " are escaped
+const wifiQr = (ssid, pw) => {
+  const esc = (s) => s.replace(/([\\;,:"])/g, '\\$1');
+  return `WIFI:T:WPA;S:${esc(ssid)};P:${esc(pw)};;`;
+};
+const qr = (text) => `/api/qr.svg?text=${encodeURIComponent(text)}`;
+
+let lastWifi = null;
+async function wifiState(w) {
+  if (!w) return;
+  if (w.state === 'connecting') $('wifi-code').hidden = true;
+  const box = $('wifi-setup');
+  if (w.state === 'setup' && w.setup) {
+    try {
+      const s = await (await fetch('/api/wifi/setup', { cache: 'no-store' })).json();
+      if (s.password) {
+        $('wifi-setup-ssid').textContent = s.ssid;
+        $('wifi-setup-pw').textContent = s.password;
+        $('wifi-setup-url').textContent = `http://${s.ip}/`;
+        $('wifi-join-qr').src = qr(wifiQr(s.ssid, s.password));
+        $('wifi-remote-qr').src = qr(`http://${s.ip}/`);
+        box.hidden = false;
+        overlay.hidden = true;
+      }
+    } catch {}
+  } else box.hidden = true;
+  const last = JSON.stringify(w.last);
+  if (lastWifi !== null && last !== lastWifi && w.last) {
+    say(w.last.result === 'joined' ? `Wi-Fi: joined ${w.last.ssid}` : `Wi-Fi: ${w.last.error}`, 8000);
+  }
+  lastWifi = last;
+  if (w.state === 'connecting') say(`Wi-Fi: joining ${w.ssid}…`, 60_000);
+}
+// the state at start, and now and then in case an event was missed while reconnecting
+async function pollWifi() {
+  try {
+    wifiState((await (await fetch('/api/state', { cache: 'no-store' })).json()).wifi);
+  } catch {}
+}
+pollWifi();
+setInterval(pollWifi, 15_000);
+
+let lastSong = '';
+let lastDevice = null;
+
+// "Pair" on the remote: the Pi is visible over Bluetooth for two minutes
+function pairing(on) {
+  const box = $('pairing');
+  clearTimeout(pairing.t);
+  box.hidden = !on;
+  if (on) pairing.t = setTimeout(() => (box.hidden = true), 120_000);
 }
 
 function listen() {

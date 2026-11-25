@@ -6,8 +6,9 @@ dance to your music, fullscreen on your TV, controlled from your phone.
 - It boots straight into the demos, with no keyboard or mouse needed.
 - **Phone remote**: scan the QR code on the TV, or open `http://ufoscene.local/` on a phone on
   the same Wi-Fi.
-- **Music**: built-in internet radio; **Spotify** (the Pi shows up as the speaker **UFOSCENE**
-  in your Spotify app, Premium needed); or a USB microphone or line in.
+- **Music**: built-in internet radio; **your phone** (Spotify or any other app) over
+  **Bluetooth** or **AirPlay**, where the Pi is the speaker **UFOSCENE**; or a USB microphone or
+  line in. The demos follow the songs.
 - Everything runs on the Pi itself. No account, no cloud.
 
 > ufoscene Pis are given away for a donation to the defence of Ukraine at
@@ -32,7 +33,9 @@ You only need the official [Raspberry Pi Imager](https://www.raspberrypi.com/sof
 3. In the customisation step, set:
    - **Hostname:** `ufoscene` (then the remote is at `http://ufoscene.local/`)
    - **Username and password**, so you can log in over SSH if you ever need to
-   - **Wi-Fi:** your network name and password (not needed with an Ethernet cable)
+   - **Wi-Fi:** your network name and password (not needed with an Ethernet cable). If you skip
+     it, or the Wi-Fi changes later, the Pi opens a setup network after two minutes (see
+     **Wi-Fi** below).
 4. Write the card, put it in the Pi, connect HDMI to the TV and power it up. The first boot
    takes a few minutes; then the demos start, with a QR code for the remote.
 
@@ -44,7 +47,9 @@ On a Pi with Raspberry Pi OS **Lite** (Trixie or Bookworm, 32- or 64-bit), with 
 curl -fsSL https://raw.githubusercontent.com/ulfmansson/ufoscene-pi/main/install.sh | sudo bash
 ```
 
-Add `-s -- --no-spotify` after `bash` to leave out the Spotify speaker.
+To try a pre-release, add `-s -- --bundle-url` and the bundle's address from the
+[releases page](https://github.com/ulfmansson/ufoscene-pi/releases) after `bash`. Run the same
+command again to update.
 
 ### Download the image yourself
 
@@ -75,14 +80,56 @@ The first start on a Pi 2 takes a minute or two before the demo and the music be
 |---|---|
 | ◀ ⟳ ▶ | previous, random and next demo |
 | Next part | next part of the current demo |
-| ⏮ Song / Song ⏭ | previous or next radio station or Spotify song |
+| ⏮ Song / Song ⏭ | previous or next radio station |
 | Demo # | jump to a demo (1–100) |
-| Radio · Spotify · Mic / line in | where the music comes from |
+| Radio · Phone · Mic / line in | where the music comes from |
+| Pair Bluetooth | lets a new phone connect over Bluetooth for two minutes |
 | Info · TV mode · QR code | ufoscene's info overlay, 30 fps TV mode, the connect screen |
 | Settings · Self-test · Reload | ufoscene's own panel, the fps meter, restart the TV page |
 
-**Spotify**: open the Spotify app on any device on the same network, tap the speaker icon and
-pick **UFOSCENE**. The Pi plays the music through the TV, and the demos follow it.
+**Music from your phone** (Spotify, YouTube Music, anything that plays sound):
+
+- **iPhone, iPad, Mac**: AirPlay to **UFOSCENE** (on the same Wi-Fi).
+- **Android** (or any phone): press **Pair Bluetooth** on the remote, then pick **UFOSCENE** in
+  the phone's Bluetooth settings. No PIN. Next time the phone connects by itself. Needs a Pi with
+  Bluetooth: a Pi 3, 4 or 5, or a Pi 2 with a USB Bluetooth adapter.
+
+The music plays through the TV at full level (use the TV's remote for the volume; the phone's
+volume buttons don't change it); ufoscene switches to it, starts a new demo per song and shows the
+artist and title. Spotify Free works too.
+
+**Song names from anywhere (Last.fm)**: Spotify on a Mac or PC, and a phone that sends no track
+info, give the Pi only the sound. Link Spotify to Last.fm
+([last.fm/settings/applications](https://www.last.fm/settings/applications)), then type your
+Last.fm username under **Song names** on the remote: ufoscene shows what you play, from any
+device, within about 10 seconds. Images built with the repository variable `LASTFM_API_KEY` have
+an API key built in; otherwise paste your own
+([last.fm/api/account/create](https://www.last.fm/api/account/create), free).
+
+**Playlists**: the remote lists ufoscene's playlists. Tapping one opens it in Spotify on the
+phone and switches the Pi to the phone; press play and pick UFOSCENE.
+
+**Spotify control (optional, Premium)**: with your own Spotify app (a Client ID from
+[developer.spotify.com](https://developer.spotify.com/dashboard), redirect URI
+`https://pi.ufoscene.net/spotify`), the remote shows what plays, skips songs and starts the
+playlists without leaving the page. The login runs in the phone's browser and the tokens stay on
+the phone; the Pi only keeps the Client ID. See [`docs/spotify-bounce/`](docs/spotify-bounce/)
+for the redirect page. Off until you set it up. (Up to 0.1 the Pi was a Spotify Connect speaker, but
+Spotify no longer lets [librespot](https://github.com/librespot-org/librespot/issues/1649) play.)
+
+**Wi-Fi**: under **Wi-Fi** on the remote, give the Pi a new network name and password. Press
+**Show code on TV** and type the six digits the TV shows: anyone on your network can open the
+remote, but only someone at the TV can change the Wi-Fi. The Pi keeps its old network until the
+new one has connected; with a wrong password nothing changes. If the new network is another one,
+join it with the phone too and open `http://ufoscene.local/` again.
+
+**No Wi-Fi** (the router got a new password, the Pi moved house, or Imager had no Wi-Fi): after
+two minutes without a known network the Pi opens its own network, **ufoscene-setup**, and the TV
+shows its password and two QR codes. Scan the first to join it, the second to open the remote
+(`http://10.42.0.1/`; most phones open it by themselves), and give your Wi-Fi under **Wi-Fi**.
+Every five minutes with no phone on it, the Pi tries its old Wi-Fi again, so a router that was
+only restarting brings it back by itself. With a network cable plugged in, it never opens the
+setup network. Needs NetworkManager (Raspberry Pi OS Bookworm and later).
 
 ## How it works
 
@@ -90,21 +137,23 @@ pick **UFOSCENE**. The Pi plays the music through the TV, and the demos follow i
 |---|---|
 | `install.sh` | installs everything on Raspberry Pi OS Lite. The image build runs the same script. |
 | `files/server.py` | a small server on port 80 (Python, standard library). It serves ufoscene, the TV page and the remote, and passes remote commands to the TV over server-sent events. |
+| `files/wifi.py` | runs as root: joins the network the remote gave (going back to the old one if it fails) and opens the setup network when the Pi is offline. It only takes requests from `server.py` on the Pi itself, through NetworkManager's `nmcli`. |
 | `files/www/tv.*` | the TV page. It runs ufoscene in a frame and presses its keys for the remote. |
 | `files/www/remote.*` | the phone remote |
-| `files/kiosk.sh`, `files/systemd/` | Chromium in kiosk mode under [cage](https://github.com/cage-kiosk/cage) on the TV, and the Spotify Connect speaker ([librespot](https://github.com/librespot-org/librespot), packaged by [raspotify](https://github.com/dtcooper/raspotify)) |
+| `files/kiosk.sh`, `files/systemd/` | Chromium in kiosk mode under [cage](https://github.com/cage-kiosk/cage) on the TV |
+| `files/phone.py`, `files/shairport-sync.conf` | the phone speaker: Bluetooth pairing and now-playing (BlueZ), AirPlay ([shairport-sync](https://github.com/mikebrady/shairport-sync)) |
 | `image/` | builds the SD-card images from Raspberry Pi OS Lite, plus the image list for Imager |
 
 Sound goes to the TV over HDMI: a WirePlumber rule (`files/wireplumber/`) puts HDMI ahead of the
 3.5 mm jack, which is still used when the screen has no speakers.
 
-When the music comes from Spotify or the mic, PipeWire's default input is pointed at the right
-place: for Spotify, the monitor of the TV output. ufoscene's microphone mode then hears it.
+When the music comes from a phone or the mic, PipeWire's default input is pointed at the right
+place: for a phone, the monitor of the TV output. ufoscene's microphone mode then hears it.
 
 Troubleshooting over SSH:
 
 ```bash
-journalctl -u ufoscene-kiosk -u ufoscene-server -u ufoscene-spotify -b
+journalctl -u ufoscene-kiosk -u ufoscene-server -u ufoscene-phone -u ufoscene-airplay -b
 ```
 
 No sound? See where it goes (the HDMI one should be the default):
