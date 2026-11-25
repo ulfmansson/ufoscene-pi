@@ -1,0 +1,14 @@
+[Unit]
+Description=ufoscene AirPlay speaker "UFOSCENE" (shairport-sync)
+After=network-online.target avahi-daemon.service sound.target user@@KUID@.service
+Wants=network-online.target avahi-daemon.service
+
+[Service]
+User=@USER@
+Environment=XDG_RUNTIME_DIR=/run/user/@KUID@
+ExecStart=/usr/bin/shairport-sync -c /etc/ufoscene/shairport-sync.conf
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

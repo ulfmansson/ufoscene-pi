@@ -6,8 +6,9 @@ dance to your music, fullscreen on your TV, controlled from your phone.
 - It boots straight into the demos, with no keyboard or mouse needed.
 - **Phone remote**: scan the QR code on the TV, or open `http://ufoscene.local/` on a phone on
   the same Wi-Fi.
-- **Music**: built-in internet radio; **Spotify** (the Pi shows up as the speaker **UFOSCENE**
-  in your Spotify app, Premium needed); or a USB microphone or line in.
+- **Music**: built-in internet radio; **your phone** (Spotify or any other app) over
+  **Bluetooth** or **AirPlay**, where the Pi is the speaker **UFOSCENE**; or a USB microphone or
+  line in. The demos follow the songs.
 - Everything runs on the Pi itself. No account, no cloud.
 
 > ufoscene Pis are given away for a donation to the defence of Ukraine at
@@ -44,7 +45,9 @@ On a Pi with Raspberry Pi OS **Lite** (Trixie or Bookworm, 32- or 64-bit), with 
 curl -fsSL https://raw.githubusercontent.com/ulfmansson/ufoscene-pi/main/install.sh | sudo bash
 ```
 
-Add `-s -- --no-spotify` after `bash` to leave out the Spotify speaker.
+To try a pre-release, add `-s -- --bundle-url` and the bundle's address from the
+[releases page](https://github.com/ulfmansson/ufoscene-pi/releases) after `bash`. Run the same
+command again to update.
 
 ### Download the image yourself
 
@@ -75,14 +78,23 @@ The first start on a Pi 2 takes a minute or two before the demo and the music be
 |---|---|
 | ◀ ⟳ ▶ | previous, random and next demo |
 | Next part | next part of the current demo |
-| ⏮ Song / Song ⏭ | previous or next radio station or Spotify song |
+| ⏮ Song / Song ⏭ | previous or next radio station |
 | Demo # | jump to a demo (1–100) |
-| Radio · Spotify · Mic / line in | where the music comes from |
+| Radio · Phone · Mic / line in | where the music comes from |
+| Pair Bluetooth | lets a new phone connect over Bluetooth for two minutes |
 | Info · TV mode · QR code | ufoscene's info overlay, 30 fps TV mode, the connect screen |
 | Settings · Self-test · Reload | ufoscene's own panel, the fps meter, restart the TV page |
 
-**Spotify**: open the Spotify app on any device on the same network, tap the speaker icon and
-pick **UFOSCENE**. The Pi plays the music through the TV, and the demos follow it.
+**Music from your phone** (Spotify, YouTube Music, anything that plays sound):
+
+- **iPhone, iPad, Mac**: AirPlay to **UFOSCENE** (on the same Wi-Fi).
+- **Android** (or any phone): press **Pair Bluetooth** on the remote, then pick **UFOSCENE** in
+  the phone's Bluetooth settings. No PIN. Next time the phone connects by itself. Needs a Pi with
+  Bluetooth: a Pi 3, 4 or 5, or a Pi 2 with a USB Bluetooth adapter.
+
+The music plays through the TV; ufoscene switches to it, starts a new demo per song and shows the
+artist and title. Spotify Free works too. (Up to 0.1 the Pi was a Spotify Connect speaker, but
+Spotify no longer lets [librespot](https://github.com/librespot-org/librespot/issues/1649) play.)
 
 ## How it works
 
@@ -92,19 +104,20 @@ pick **UFOSCENE**. The Pi plays the music through the TV, and the demos follow i
 | `files/server.py` | a small server on port 80 (Python, standard library). It serves ufoscene, the TV page and the remote, and passes remote commands to the TV over server-sent events. |
 | `files/www/tv.*` | the TV page. It runs ufoscene in a frame and presses its keys for the remote. |
 | `files/www/remote.*` | the phone remote |
-| `files/kiosk.sh`, `files/systemd/` | Chromium in kiosk mode under [cage](https://github.com/cage-kiosk/cage) on the TV, and the Spotify Connect speaker ([librespot](https://github.com/librespot-org/librespot), packaged by [raspotify](https://github.com/dtcooper/raspotify)) |
+| `files/kiosk.sh`, `files/systemd/` | Chromium in kiosk mode under [cage](https://github.com/cage-kiosk/cage) on the TV |
+| `files/phone.py`, `files/shairport-sync.conf` | the phone speaker: Bluetooth pairing and now-playing (BlueZ), AirPlay ([shairport-sync](https://github.com/mikebrady/shairport-sync)) |
 | `image/` | builds the SD-card images from Raspberry Pi OS Lite, plus the image list for Imager |
 
 Sound goes to the TV over HDMI: a WirePlumber rule (`files/wireplumber/`) puts HDMI ahead of the
 3.5 mm jack, which is still used when the screen has no speakers.
 
-When the music comes from Spotify or the mic, PipeWire's default input is pointed at the right
-place: for Spotify, the monitor of the TV output. ufoscene's microphone mode then hears it.
+When the music comes from a phone or the mic, PipeWire's default input is pointed at the right
+place: for a phone, the monitor of the TV output. ufoscene's microphone mode then hears it.
 
 Troubleshooting over SSH:
 
 ```bash
-journalctl -u ufoscene-kiosk -u ufoscene-server -u ufoscene-spotify -b
+journalctl -u ufoscene-kiosk -u ufoscene-server -u ufoscene-phone -u ufoscene-airplay -b
 ```
 
 No sound? See where it goes (the HDMI one should be the default):

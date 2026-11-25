@@ -57,8 +57,8 @@ async function showConnect(ms = CONNECT_SHOW_MS) {
 
 // ------------------------------------------------------------ audio sources
 
-// 'spotify' is the Pi's own Spotify Connect speaker: its sound is captured from the
-// audio output's monitor, which ufoscene sees as a microphone.
+// 'phone' is a phone playing to the Pi over Bluetooth or AirPlay: its sound is captured from
+// the audio output's monitor, which ufoscene sees as a microphone.
 function setAudio(source) {
   const kind = source === 'radio' ? 'radio' : 'mic';
   localStorage.setItem('ufo.audio', kind);
@@ -66,7 +66,7 @@ function setAudio(source) {
   // ufoscene picks up a new source on Start: open the panel and start again
   if (running()) key('p');
   setTimeout(() => key('Enter'), 300);
-  say(source === 'radio' ? 'Internet radio' : source === 'spotify' ? 'Spotify' : 'Microphone / line in');
+  say(source === 'radio' ? 'Internet radio' : source === 'phone' ? 'Music from your phone' : 'Microphone / line in');
   report({ audio: source });
 }
 
@@ -147,19 +147,44 @@ function handle({ cmd, arg }) {
       fpsBox.hidden = !selftest;
       say(selftest ? `Self-test: needs ${MIN_FPS} fps or more` : 'Self-test off');
       break;
-    case 'spotify':
-      // now playing on the Spotify Connect speaker: tell the demo, switch to it if needed
-      if (arg?.artist || arg?.title) {
-        try {
-          ufo()?.sendTrack?.(arg.artist || '', arg.title || '');
-        } catch {}
+    case 'nowplaying': {
+      // a phone plays to the Pi (Bluetooth or AirPlay): switch to it, and tell the demo the song
+      const song = `${arg?.artist || ''}\u0000${arg?.title || ''}`;
+      if (arg?.playing && localStorage.getItem('ufopi.audio') !== 'phone') setAudio('phone');
+      if ((arg?.artist || arg?.title) && song !== lastSong) {
+        lastSong = song;
+        // after a switch ufoscene restarts its sound; give it a moment before the new song
+        setTimeout(() => {
+          try {
+            ufo()?.sendTrack?.(arg.artist || '', arg.title || '');
+          } catch {}
+        }, 1500);
       }
-      if (arg?.playing && localStorage.getItem('ufopi.audio') !== 'spotify') setAudio('spotify');
+      break;
+    }
+    case 'pair':
+      pairing(true);
+      break;
+    case 'bluetooth':
+      if (!arg?.pairing) pairing(false);
+      if (arg?.device && arg.device !== lastDevice) say(`Connected: ${arg.device}`, 4000);
+      lastDevice = arg?.device || null;
       break;
     case 'reload':
       location.reload();
       break;
   }
+}
+
+let lastSong = '';
+let lastDevice = null;
+
+// "Pair" on the remote: the Pi is visible over Bluetooth for two minutes
+function pairing(on) {
+  const box = $('pairing');
+  clearTimeout(pairing.t);
+  box.hidden = !on;
+  if (on) pairing.t = setTimeout(() => (box.hidden = true), 120_000);
 }
 
 function listen() {

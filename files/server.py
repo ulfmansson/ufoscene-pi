@@ -4,7 +4,8 @@
 * serves ufoscene itself (/ufo/) and the TV page that wraps it (/tv) to the kiosk browser
 * serves the phone remote (/) to anything on the home network
 * passes remote commands to the TV page as server-sent events (/api/events)
-* collects state from the TV page and from the Spotify Connect speaker (/api/state, /api/spotify)
+* collects state from the TV page (/api/state) and from the phone speakers, Bluetooth and
+  AirPlay (/api/nowplaying, /api/bluetooth; phone.py sends those)
 
 Standard library only, plus python3-qrcode for the QR code on the TV.
 """
@@ -23,7 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 mimetypes.add_type("application/wasm", ".wasm")
 mimetypes.add_type("text/javascript", ".js")
@@ -32,9 +33,11 @@ mimetypes.add_type("image/svg+xml", ".svg")
 # Commands the phone may send. The TV page decides what each one does.
 COMMANDS = {
     "start", "next", "prev", "random", "scene", "song-next", "song-prev", "hud", "tv",
-    "panel", "demo", "audio", "overlay", "selftest", "reload",
+    "panel", "demo", "audio", "overlay", "selftest", "reload", "pair",
 }
-AUDIO_SOURCES = {"radio", "mic", "spotify"}
+# phone: whatever a phone plays to the Pi over Bluetooth or AirPlay
+AUDIO_SOURCES = {"radio", "mic", "phone"}
+PHONE_SOURCES = {"bluetooth", "airplay"}
 
 
 class Hub:
@@ -48,7 +51,8 @@ class Hub:
             "fps": None,
             "audio": "radio",
             "demo": None,
-            "spotify": None,  # {"artist", "title", "playing"}
+            "nowplaying": None,  # {"source", "artist", "title", "playing"}
+            "bluetooth": None,  # {"available", "pairing", "device"} from phone.py
             "tv_seen": None,
         }
 
@@ -106,7 +110,7 @@ def remote_urls() -> dict:
 def set_default_input(source: str):
     """Point PipeWire's default input where ufoscene should listen.
 
-    spotify: the monitor of the output (what the Pi itself plays); mic: a real input device.
+    phone: the monitor of the output (what the Pi itself plays); mic: a real input device.
     ufoscene's microphone mode then simply opens the default input.
     """
     import subprocess
@@ -115,7 +119,7 @@ def set_default_input(source: str):
         return subprocess.run(["pactl", *args], capture_output=True, text=True, timeout=5).stdout.strip()
 
     try:
-        if source == "spotify":
+        if source == "phone":
             sink = pactl("get-default-sink")
             if sink:
                 pactl("set-default-source", f"{sink}.monitor")
@@ -246,19 +250,34 @@ class Handler(BaseHTTPRequestHandler):
             allowed = {k: body[k] for k in ("fps", "audio", "demo") if k in body}
             self.hub.update(tv_seen=time.time(), **allowed)
             return self.send_json({"ok": True})
-        if p == "/api/spotify" and self.from_this_pi():
+        if p == "/api/nowplaying" and self.from_this_pi():
             body = self.read_json()
-            before = self.hub.snapshot().get("spotify") or {}
+            source = body.get("source")
+            if source not in PHONE_SOURCES:
+                return self.send_json({"error": "unknown source"}, HTTPStatus.BAD_REQUEST)
+            before = self.hub.snapshot().get("nowplaying") or {}
+            same = before.get("source") == source
             now = {
-                # play/pause events carry no track: keep the one we know
-                "artist": str(body.get("artist", before.get("artist", "")))[:200],
-                "title": str(body.get("title", before.get("title", "")))[:200],
+                "source": source,
+                # play/pause events carry no track: keep the one we know from the same source
+                "artist": str(body.get("artist", before.get("artist", "") if same else ""))[:200],
+                "title": str(body.get("title", before.get("title", "") if same else ""))[:200],
                 "playing": bool(body.get("playing", True)),
             }
-            if now["playing"] and before.get("playing") is not True:
-                set_default_input("spotify")
-            self.hub.update(spotify=now)
-            self.hub.publish({"cmd": "spotify", "arg": now})
+            if now["playing"] and not (same and before.get("playing") is True):
+                set_default_input("phone")
+            self.hub.update(nowplaying=now)
+            self.hub.publish({"cmd": "nowplaying", "arg": now})
+            return self.send_json({"ok": True})
+        if p == "/api/bluetooth" and self.from_this_pi():
+            body = self.read_json()
+            bt = {
+                "available": bool(body.get("available")),
+                "pairing": bool(body.get("pairing")),
+                "device": str(body.get("device") or "")[:100] or None,
+            }
+            self.hub.update(bluetooth=bt)
+            self.hub.publish({"cmd": "bluetooth", "arg": bt})
             return self.send_json({"ok": True})
         self.send_error(HTTPStatus.NOT_FOUND)
 

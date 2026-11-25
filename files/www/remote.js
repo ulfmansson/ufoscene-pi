@@ -22,6 +22,7 @@ for (const b of document.querySelectorAll('[data-audio]')) {
   b.setAttribute('role', 'radio');
   b.addEventListener('click', () => send('audio', b.dataset.audio));
 }
+$('pair').addEventListener('click', () => send('pair'));
 $('jump').addEventListener('submit', (e) => {
   e.preventDefault();
   const n = Number($('demo-no').value);
@@ -42,9 +43,16 @@ async function refresh() {
     if (!s.tv_connected) status('The TV page is not running yet…', 'bad');
     else status(s.demo ? `Connected · demo ${s.demo}` : 'Connected', 'ok');
     for (const b of document.querySelectorAll('[data-audio]')) b.setAttribute('aria-checked', String(b.dataset.audio === s.audio));
-    $('spotify-hint').hidden = s.audio !== 'spotify';
-    const sp = s.spotify;
-    $('nowplaying').textContent = sp && (sp.artist || sp.title) ? `♪ ${sp.artist} — ${sp.title}${sp.playing ? '' : ' (paused)'}` : '';
+    const bt = s.bluetooth;
+    $('phone-hint').hidden = s.audio !== 'phone';
+    $('bt-row').hidden = !bt?.available;
+    $('bt-hint').hidden = !bt?.available;
+    $('bt-none').hidden = !bt || bt.available;
+    $('pair').textContent = bt?.pairing ? 'Pairing… pick UFOSCENE on your phone' : bt?.device ? `Bluetooth: ${bt.device} · Pair another` : 'Pair Bluetooth';
+    $('pair').disabled = !!bt?.pairing;
+    const np = s.nowplaying;
+    const via = np?.source === 'airplay' ? 'AirPlay' : 'Bluetooth';
+    $('nowplaying').textContent = np && (np.artist || np.title) ? `♪ ${np.artist} — ${np.title} · ${via}${np.playing ? '' : ' (paused)'}` : '';
     $('fps').textContent = s.fps == null ? '' : `Pi speed: ${Math.round(s.fps)} frames per second${s.fps < 25 ? ' — too slow for smooth demos' : ''}`;
   } catch {
     status('Looking for the Pi…', 'bad');

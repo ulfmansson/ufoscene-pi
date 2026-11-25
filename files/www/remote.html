@@ -36,10 +36,18 @@
   <h2>Music</h2>
   <section class="seg" role="radiogroup" aria-label="Music">
     <button data-audio="radio">Radio</button>
-    <button data-audio="spotify">Spotify</button>
+    <button data-audio="phone">Phone</button>
     <button data-audio="mic">Mic / line in</button>
   </section>
-  <p class="hint" id="spotify-hint">Spotify: in the Spotify app, pick the speaker <b>UFOSCENE</b>. Premium needed.</p>
+  <div id="phone-hint" class="hint">
+    <p>Play anything on your phone (Spotify, YouTube, …) to the speaker <b>UFOSCENE</b>:</p>
+    <p><b>iPhone</b>: AirPlay <span aria-hidden="true">▭▲</span> → UFOSCENE.
+       <span id="bt-hint"><b>Android</b>: press Pair, then pick UFOSCENE in Bluetooth settings.</span></p>
+    <p id="bt-none" hidden>This Pi has no Bluetooth: use AirPlay, or add a USB Bluetooth adapter.</p>
+  </div>
+  <section class="row" id="bt-row">
+    <button id="pair">Pair Bluetooth</button>
+  </section>
   <p class="hint" id="nowplaying"></p>
 
   <h2>Screen</h2>

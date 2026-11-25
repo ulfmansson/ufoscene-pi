@@ -100,19 +100,22 @@ class ServerTest(unittest.TestCase):
         q = server.Handler.hub.subscribe()
         self.assertEqual(request("POST", "/api/cmd", {"cmd": "next"})[0], 200)
         self.assertEqual(request("POST", "/api/cmd", {"cmd": "demo", "arg": 42})[0], 200)
-        self.assertEqual(request("POST", "/api/cmd", {"cmd": "audio", "arg": "spotify"})[0], 200)
+        self.assertEqual(request("POST", "/api/cmd", {"cmd": "audio", "arg": "phone"})[0], 200)
+        self.assertEqual(request("POST", "/api/cmd", {"cmd": "pair"})[0], 200)
         self.assertEqual(q.get_nowait(), {"cmd": "next", "arg": None})
         self.assertEqual(q.get_nowait(), {"cmd": "demo", "arg": 42})
-        self.assertEqual(q.get_nowait(), {"cmd": "audio", "arg": "spotify"})
+        self.assertEqual(q.get_nowait(), {"cmd": "audio", "arg": "phone"})
+        self.assertEqual(q.get_nowait(), {"cmd": "pair", "arg": None})
 
     def test_bad_commands_are_refused(self):
         for body in [{"cmd": "rm -rf"}, {"cmd": "demo", "arg": "1; drop"}, {"cmd": "demo", "arg": 0},
-                     {"cmd": "audio", "arg": "tab"}, {}]:
+                     {"cmd": "audio", "arg": "tab"}, {"cmd": "audio", "arg": "spotify"}, {}]:
             self.assertEqual(request("POST", "/api/cmd", body)[0], 400, body)
 
-    def test_state_and_spotify_only_from_the_pi(self):
+    def test_state_nowplaying_and_bluetooth_only_from_the_pi(self):
         self.assertEqual(request("POST", "/api/state", {"fps": 30})[0], 404)
-        self.assertEqual(request("POST", "/api/spotify", {"title": "x"})[0], 404)
+        self.assertEqual(request("POST", "/api/nowplaying", {"source": "airplay", "title": "x"})[0], 404)
+        self.assertEqual(request("POST", "/api/bluetooth", {"available": True})[0], 404)
         self.assertEqual(request("POST", "/api/state", {"fps": 30, "evil": 1}, client="127.0.0.1")[0], 200)
         _, _, body = request("GET", "/api/state")
         s = json.loads(body)
@@ -120,13 +123,26 @@ class ServerTest(unittest.TestCase):
         self.assertNotIn("evil", s)
         self.assertIn("mdns", s["urls"])
 
-    def test_spotify_keeps_the_track_on_pause(self):
+    def test_nowplaying_keeps_the_track_on_pause(self):
         q = server.Handler.hub.subscribe()
-        request("POST", "/api/spotify", {"artist": "Jean-Michel Jarre", "title": "Oxygène 4"}, client="127.0.0.1")
-        request("POST", "/api/spotify", {"playing": False}, client="127.0.0.1")
+        pi = "127.0.0.1"
+        request("POST", "/api/nowplaying", {"source": "airplay", "artist": "Jean-Michel Jarre", "title": "Oxygène 4"}, client=pi)
+        request("POST", "/api/nowplaying", {"source": "airplay", "playing": False}, client=pi)
         s = json.loads(request("GET", "/api/state")[2])
-        self.assertEqual(s["spotify"], {"artist": "Jean-Michel Jarre", "title": "Oxygène 4", "playing": False})
-        self.assertEqual(q.get_nowait()["cmd"], "spotify")
+        self.assertEqual(s["nowplaying"], {"source": "airplay", "artist": "Jean-Michel Jarre", "title": "Oxygène 4", "playing": False})
+        self.assertEqual(q.get_nowait()["cmd"], "nowplaying")
+        # another source does not inherit the song
+        request("POST", "/api/nowplaying", {"source": "bluetooth", "playing": True}, client=pi)
+        s = json.loads(request("GET", "/api/state")[2])
+        self.assertEqual(s["nowplaying"], {"source": "bluetooth", "artist": "", "title": "", "playing": True})
+        self.assertEqual(request("POST", "/api/nowplaying", {"source": "spotify"}, client=pi)[0], 400)
+
+    def test_bluetooth_state(self):
+        q = server.Handler.hub.subscribe()
+        request("POST", "/api/bluetooth", {"available": True, "pairing": True, "device": "Pixel 9", "x": 1}, client="127.0.0.1")
+        s = json.loads(request("GET", "/api/state")[2])
+        self.assertEqual(s["bluetooth"], {"available": True, "pairing": True, "device": "Pixel 9"})
+        self.assertEqual(q.get_nowait(), {"cmd": "bluetooth", "arg": s["bluetooth"]})
 
     def test_qr(self):
         status, headers, body = request("GET", "/api/qr.svg?text=http://ufoscene.local/")

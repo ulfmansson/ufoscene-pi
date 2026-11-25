@@ -1,0 +1,14 @@
+[Unit]
+Description=ufoscene phone speaker: Bluetooth pairing and what phones play (Bluetooth, AirPlay)
+After=bluetooth.service ufoscene-server.service user@@KUID@.service
+Wants=bluetooth.service
+
+[Service]
+User=@USER@
+Environment=XDG_RUNTIME_DIR=/run/user/@KUID@
+ExecStart=/usr/bin/python3 @PREFIX@/phone.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

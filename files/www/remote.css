@@ -42,3 +42,7 @@ input {
 footer { text-align: center; color: #667; font-size: .8rem; padding: 20px; }
 footer a { color: #8af; }
 @media (prefers-reduced-motion: reduce) { button:active { transform: none; } }
+
+.hint p { margin: 4px 0; }
+[hidden] { display: none !important; }
+button:disabled { opacity: .6; }
