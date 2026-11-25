@@ -92,7 +92,8 @@ The first start on a Pi 2 takes a minute or two before the demo and the music be
   the phone's Bluetooth settings. No PIN. Next time the phone connects by itself. Needs a Pi with
   Bluetooth: a Pi 3, 4 or 5, or a Pi 2 with a USB Bluetooth adapter.
 
-The music plays through the TV; ufoscene switches to it, starts a new demo per song and shows the
+The music plays through the TV at full level (use the TV's remote for the volume; the phone's
+volume buttons don't change it); ufoscene switches to it, starts a new demo per song and shows the
 artist and title. Spotify Free works too. (Up to 0.1 the Pi was a Spotify Connect speaker, but
 Spotify no longer lets [librespot](https://github.com/librespot-org/librespot/issues/1649) play.)
 
