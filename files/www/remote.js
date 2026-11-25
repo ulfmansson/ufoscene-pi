@@ -1,6 +1,7 @@
 // The phone remote: buttons become commands for the TV page on the Pi.
 
 import * as spotify from './spotify.js';
+import { egg } from './eggs.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -37,7 +38,9 @@ $('lfm-off').addEventListener('click', () => send('lastfm', { user: '' }));
 $('jump').addEventListener('submit', (e) => {
   e.preventDefault();
   const n = Number($('demo-no').value);
-  if (n >= 1) send('demo', n);
+  const extra = egg(n);
+  if (extra) playOnPhone(extra.title, extra.link);
+  else if (n >= 1) send('demo', n);
   $('demo-no').blur();
 });
 
@@ -164,33 +167,40 @@ async function showPlaylists() {
       a.target = '_blank';
       a.rel = 'noopener';
       a.textContent = p.title;
-      // the music will come from this phone: switch the Pi to it now (the page may go to Spotify)
-      a.addEventListener('click', async (e) => {
-        if (spotify.connected()) {
-          // logged in: start it on the device that plays (the phone); no need to leave the remote
-          e.preventDefault();
-          try {
-            await spotify.playPlaylist(p.spotify);
-            spMsg(`Playing ${p.title}.`);
-            setTimeout(spRefresh, 1500);
-          } catch (err) {
-            spMsg(err.message, true);
-            if (err.reason === 'NO_ACTIVE_DEVICE') return; // open Spotify first; the hint says so
-          }
-        }
-        fetch('/api/cmd', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ cmd: 'audio', arg: 'phone' }),
-          keepalive: true,
-        }).catch(() => {});
-        $('phone-hint').hidden = false;
-      });
+      a.addEventListener('click', (e) => playOnPhone(p.title, p.spotify, e));
       grid.append(a);
     }
     box.append(h, grid);
   }
   if (!box.childElementCount) box.textContent = 'No playlists in this version.';
+}
+
+// Play a Spotify playlist or album with this phone as the player, and switch the Pi to the phone.
+// Logged in to Spotify control: start it right here. Otherwise the link opens the Spotify app:
+// a link the user tapped (e) opens by itself, anything else (a secret demo number) is opened here.
+async function playOnPhone(title, link, e) {
+  if (spotify.connected()) {
+    e?.preventDefault();
+    try {
+      await spotify.playLink(link);
+      spMsg(`Playing ${title}.`);
+      setTimeout(spRefresh, 1500);
+    } catch (err) {
+      spMsg(err.message, true);
+      if (err.reason === 'NO_ACTIVE_DEVICE') return; // open Spotify first; the hint says so
+    }
+  } else if (!e) {
+    const w = window.open(link, '_blank'); // still inside the tap, so it is not blocked
+    if (w) w.opener = null;
+    else location.href = link;
+  }
+  fetch('/api/cmd', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cmd: 'audio', arg: 'phone' }),
+    keepalive: true,
+  }).catch(() => {});
+  $('phone-hint').hidden = false;
 }
 
 // ------------------------------------------------------------ Spotify control (optional)
