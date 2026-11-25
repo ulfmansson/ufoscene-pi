@@ -114,6 +114,14 @@ async function refresh() {
   try {
     const s = await (await fetch('/api/state', { cache: 'no-store' })).json();
     $('version').textContent = s.version;
+    const up = s.update;
+    const when = up?.checked ? new Date(up.checked * 1000).toLocaleDateString() : '';
+    $('update').textContent = !up ? '' : {
+      updated: `Updated by itself from ${up.previous} on ${when}`,
+      failed: `${up.latest} did not start here, so it went back to ${up.running} (${when})`,
+      skipped: `Staying on ${up.running}: ${up.latest} did not start here`,
+      off: 'Automatic updates are off',
+    }[up.result] || (up.result === 'current' || up.result === 'error' ? `Updates are checked every night · last ${when}` : '');
     if (!s.tv_connected) status('The TV page is not running yet…', 'bad');
     else status(s.demo ? `Connected · demo ${s.demo}` : 'Connected', 'ok');
     for (const b of document.querySelectorAll('[data-audio]')) b.setAttribute('aria-checked', String(b.dataset.audio === s.audio));

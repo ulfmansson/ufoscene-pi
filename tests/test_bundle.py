@@ -36,7 +36,9 @@ class BundleTest(unittest.TestCase):
         # every file the pages load is in it (remote.js imports eggs.js and spotify.js)
         for f in (ROOT / "files" / "www").iterdir():
             self.assertIn(f"files/www/{f.name}", names)
-        for f in ("files/www/eggs.js", "files/www/spotify.js", "ufo/ufo.wasm", "ufo/index.html"):
+        # the installer travels with its files (the nightly update installs and rolls back with it)
+        self.assertIn("install.sh", names)
+        for f in ("files/www/eggs.js", "files/update.py", "files/systemd/ufoscene-update.timer", "files/www/spotify.js", "ufo/ufo.wasm", "ufo/index.html"):
             self.assertIn(f, names)
 
 

@@ -60,6 +60,21 @@ The `.img.xz` files are on the [releases page](https://github.com/ulfmansson/ufo
 
 Write one with Imager (**Use custom**) or any other tool.
 
+### Updates
+
+A Pi updates itself: every night, at a random time between 3 and 5, it looks for a newer **full
+release** (never a pre-release) and installs it. It keeps the version it ran; if the new one does
+not come up within five minutes (the server answers with the new version, and the TV page runs
+again), it goes back to that version and never tries that release again. The remote's footer
+says what happened. A Pi set up from a pre-release moves on to the full release that follows it;
+one built from a branch is left alone.
+
+Off:  `echo off | sudo tee /etc/ufoscene/auto-update`. Now:  `sudo systemctl start
+ufoscene-update.service`, then `journalctl -u ufoscene-update` for what it did.
+
+A Pi on an older version (up to v0.2.0-rc6) has no updater yet: update it once by hand with the
+command above.
+
 ## Which Pi?
 
 The demos need about **25 frames per second** to look right. Press **Self-test** on the remote
@@ -139,6 +154,7 @@ setup network. Needs NetworkManager (Raspberry Pi OS Bookworm and later).
 | `install.sh` | installs everything on Raspberry Pi OS Lite. The image build runs the same script. |
 | `files/server.py` | a small server on port 80 (Python, standard library). It serves ufoscene, the TV page and the remote, and passes remote commands to the TV over server-sent events. |
 | `files/diag.py`, `files/www/diag.*` | the troubleshooting page: read-only facts from `/proc`, `/sys`, `systemctl`, `pactl`, `iw`, `ip` and `vcgencmd` (no passwords, keys or logs), and the guides that use them |
+| `files/update.py` | the nightly update (`ufoscene-update.timer`, as root): installs a newer full release with the installer from its own bundle, and goes back to the previous version if the new one does not start. |
 | `files/wifi.py` | runs as root: joins the network the remote gave (going back to the old one if it fails) and opens the setup network when the Pi is offline. It only takes requests from `server.py` on the Pi itself, through NetworkManager's `nmcli`. |
 | `files/www/tv.*` | the TV page. It runs ufoscene in a frame and presses its keys for the remote. |
 | `files/www/remote.*` | the phone remote |

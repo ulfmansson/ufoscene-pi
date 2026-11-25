@@ -1,0 +1,11 @@
+[Unit]
+Description=Look for a new ufoscene-pi release every night
+
+[Timer]
+# between 3 and 5 at night; Pis spread over two hours, and one that was off catches up at boot
+OnCalendar=*-*-* 03:00:00
+RandomizedDelaySec=2h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

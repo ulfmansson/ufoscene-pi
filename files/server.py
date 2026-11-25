@@ -339,6 +339,7 @@ class Handler(BaseHTTPRequestHandler):
     hub: Hub
     settings: "Settings"
     wifi: Wifi
+    update_status: Path | None = None  # status.json from update.py (the nightly update)
     diagnostics: diag.Diagnostics
     www: Path
     ufo: Path
@@ -409,6 +410,16 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         return True
 
+    def update_state(self) -> dict | None:
+        """What the nightly update did last (update.py writes it; no secrets in it)."""
+        try:
+            v = json.loads(self.update_status.read_text()) if self.update_status else None
+        except (OSError, ValueError):
+            return None
+        if not isinstance(v, dict):
+            return None
+        return {k: v.get(k) for k in ("result", "message", "running", "latest", "previous", "checked")}
+
     def do_GET(self):
         url = urlparse(self.path)
         p = url.path
@@ -435,7 +446,7 @@ class Handler(BaseHTTPRequestHandler):
             # a Spotify Client ID is public (it names the app); the phones keep their own tokens
             spotify = {"client_id": self.settings.spotify_client_id()}
             return self.send_json({**self.hub.snapshot(), "urls": remote_urls(), "lastfm": lastfm, "spotify": spotify,
-                                   "wifi": self.wifi.public()})
+                                   "wifi": self.wifi.public(), "update": self.update_state()})
         if p == "/api/diag":
             host = (self.headers.get("Host") or "")[:100]
             return self.send_json(self.diagnostics.report(
@@ -581,6 +592,7 @@ def main():
     ap.add_argument("--ufo", default=os.environ.get("UFO_WEB", "/opt/ufoscene/ufo"))
     ap.add_argument("--state", default=os.environ.get("STATE_DIRECTORY", "/var/lib/ufoscene"))
     ap.add_argument("--lastfm-key-file", default="/etc/ufoscene/lastfm-api-key")
+    ap.add_argument("--update-status", default="/var/lib/ufoscene-update/status.json")
     a = ap.parse_args()
 
     try:
@@ -591,6 +603,7 @@ def main():
     Handler.settings = Settings(Path(a.state) / "settings.json", built_in)
     Handler.hub = Hub()
     Handler.wifi = Wifi()
+    Handler.update_status = Path(a.update_status)
     Handler.diagnostics = diag.Diagnostics()
     Handler.www = Path(a.www)
     Handler.ufo = Path(a.ufo)

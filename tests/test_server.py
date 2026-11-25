@@ -198,6 +198,19 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(d["lastfm"], {"user": "ufo_fan", "key": True})
         self.assertNotIn(key.encode(), body)
 
+    def test_nightly_update_status(self):
+        self.assertIsNone(json.loads(request("GET", "/api/state")[2])["update"])
+        status = Path(self.tmp.name) / "update-status.json"
+        status.write_text(json.dumps({"result": "failed", "message": "v0.2.1 did not start", "running": "v0.2.0",
+                                      "latest": "v0.2.1", "checked": 1, "bad": ["v0.2.1"]}))
+        server.Handler.update_status = status
+        try:
+            up = json.loads(request("GET", "/api/state")[2])["update"]
+        finally:
+            server.Handler.update_status = None
+        self.assertEqual((up["result"], up["running"], up["latest"]), ("failed", "v0.2.0", "v0.2.1"))
+        self.assertNotIn("bad", up)
+
     def test_qr(self):
         status, headers, body = request("GET", "/api/qr.svg?text=http://ufoscene.local/")
         self.assertEqual(status, 200)
