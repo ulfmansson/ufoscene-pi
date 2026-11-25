@@ -1,5 +1,7 @@
 // The phone remote: buttons become commands for the TV page on the Pi.
 
+import * as spotify from './spotify.js';
+
 const $ = (id) => document.getElementById(id);
 
 async function send(cmd, arg) {
@@ -59,6 +61,11 @@ async function refresh() {
     $('bt-none').hidden = !bt || bt.available;
     $('pair').textContent = bt?.pairing ? 'Pairing… pick UFOSCENE on your phone' : bt?.device ? `Bluetooth: ${bt.device} · Pair another` : 'Pair Bluetooth';
     $('pair').disabled = !!bt?.pairing;
+    if ((s.spotify?.client_id || '') !== clientId) {
+      clientId = s.spotify?.client_id || '';
+      spShow();
+      spRefresh();
+    }
     const lf = s.lastfm || {};
     $('lfm-state').textContent = lf.user && lf.key ? `From Last.fm: ${lf.user} ✓` : lf.user ? 'Last.fm needs an API key.' : '';
     $('lfm-key-row').hidden = !!lf.built_in_key;
@@ -97,7 +104,19 @@ async function showPlaylists() {
       a.rel = 'noopener';
       a.textContent = p.title;
       // the music will come from this phone: switch the Pi to it now (the page may go to Spotify)
-      a.addEventListener('click', () => {
+      a.addEventListener('click', async (e) => {
+        if (spotify.connected()) {
+          // logged in: start it on the device that plays (the phone); no need to leave the remote
+          e.preventDefault();
+          try {
+            await spotify.playPlaylist(p.spotify);
+            spMsg(`Playing ${p.title}.`);
+            setTimeout(spRefresh, 1500);
+          } catch (err) {
+            spMsg(err.message, true);
+            if (err.reason === 'NO_ACTIVE_DEVICE') return; // open Spotify first; the hint says so
+          }
+        }
         fetch('/api/cmd', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -112,6 +131,73 @@ async function showPlaylists() {
   }
   if (!box.childElementCount) box.textContent = 'No playlists in this version.';
 }
+
+// ------------------------------------------------------------ Spotify control (optional)
+
+let clientId = '';
+function spMsg(text, bad = false) {
+  $('sp-msg').textContent = text;
+  $('sp-msg').className = `hint ${bad ? 'bad' : ''}`;
+}
+function spShow() {
+  const on = spotify.connected();
+  $('sp-player').hidden = !(on && clientId);
+  $('sp-login').hidden = on || !clientId;
+  $('sp-setup').hidden = !!clientId && !$('sp-setup').open;
+  if (!clientId) $('sp-setup').hidden = false;
+}
+async function spRefresh() {
+  if (!spotify.connected() || !clientId || document.visibilityState !== 'visible') return;
+  try {
+    const n = await spotify.nowPlaying();
+    $('sp-now').textContent = n?.title ? `${n.playing ? '▶' : '⏸'} ${n.artist} — ${n.title}${n.device ? ` · on ${n.device}` : ''}` : 'Nothing playing on Spotify right now.';
+    $('sp-toggle').textContent = n?.playing ? '⏸' : '▶';
+    $('sp-toggle').dataset.playing = n?.playing ? '1' : '';
+  } catch (e) {
+    $('sp-now').textContent = e.message;
+  }
+}
+const spDo = (fn) => async () => {
+  if (navigator.vibrate) navigator.vibrate(15);
+  try {
+    await fn();
+    spMsg('');
+  } catch (e) {
+    spMsg(e.message, true);
+  }
+  setTimeout(spRefresh, 700);
+};
+$('sp-redirect').textContent = spotify.REDIRECT_URI;
+$('sp-prev').addEventListener('click', spDo(spotify.previous));
+$('sp-next').addEventListener('click', spDo(spotify.next));
+$('sp-toggle').addEventListener('click', spDo(() => ($('sp-toggle').dataset.playing ? spotify.pause() : spotify.play())));
+$('sp-login-btn').addEventListener('click', () => spotify.login(clientId));
+$('sp-logout').addEventListener('click', () => {
+  spotify.logout();
+  spMsg('Logged out of Spotify on this phone.');
+  spShow();
+});
+$('sp-change').addEventListener('click', () => {
+  $('sp-setup').hidden = false;
+  $('sp-setup').open = true;
+  $('sp-client').value = clientId;
+});
+$('sp-app').addEventListener('submit', (e) => {
+  e.preventDefault();
+  send('spotify-app', { client_id: $('sp-client').value.trim() });
+  $('sp-setup').open = false;
+});
+$('sp-clear').addEventListener('click', () => {
+  send('spotify-app', { client_id: '' });
+  spotify.logout();
+});
+spotify.finishLogin().then((err) => {
+  if (err === null) return;
+  spMsg(err || 'Logged in to Spotify ✓', !!err);
+  spShow();
+  spRefresh();
+});
+setInterval(spRefresh, 5000);
 
 showPlaylists();
 refresh();

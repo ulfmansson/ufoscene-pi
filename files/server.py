@@ -37,12 +37,14 @@ mimetypes.add_type("image/svg+xml", ".svg")
 COMMANDS = {
     "start", "next", "prev", "random", "scene", "song-next", "song-prev", "hud", "tv",
     "panel", "demo", "audio", "overlay", "selftest", "reload", "pair", "lastfm",
+    "spotify-app",
 }
 # phone: whatever a phone plays to the Pi over Bluetooth or AirPlay
 AUDIO_SOURCES = {"radio", "mic", "phone"}
 PHONE_SOURCES = {"bluetooth", "airplay"}
 LASTFM_USER = re.compile(r"[A-Za-z][A-Za-z0-9_-]{1,14}")  # Last.fm's own rule
 LASTFM_KEY = re.compile(r"[0-9a-f]{32}")
+SPOTIFY_CLIENT_ID = re.compile(r"[0-9a-f]{32}")
 
 
 class Settings:
@@ -68,6 +70,25 @@ class Settings:
             return {"user": self.data.get("lastfm_user") or "",
                     "key": self.data.get("lastfm_key") or self.built_in_key}
 
+    def spotify_client_id(self) -> str:
+        with self.lock:
+            return self.data.get("spotify_client_id") or ""
+
+    def set_spotify_client_id(self, client_id: str):
+        with self.lock:
+            if client_id:
+                self.data["spotify_client_id"] = client_id
+            else:
+                self.data.pop("spotify_client_id", None)
+            self._save()
+
+    def _save(self):
+        if self.path:
+            tmp = self.path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(self.data))
+            tmp.chmod(0o600)
+            tmp.replace(self.path)
+
     def set_lastfm(self, user: str, key: str | None):
         with self.lock:
             if user:
@@ -79,11 +100,7 @@ class Settings:
                     self.data["lastfm_key"] = key
                 else:
                     self.data.pop("lastfm_key", None)
-            if self.path:
-                tmp = self.path.with_suffix(".tmp")
-                tmp.write_text(json.dumps(self.data))
-                tmp.chmod(0o600)
-                tmp.replace(self.path)
+            self._save()
 
 
 class Hub:
@@ -267,7 +284,9 @@ class Handler(BaseHTTPRequestHandler):
         if p == "/api/state":
             lf = self.settings.lastfm()
             lastfm = {"user": lf["user"], "key": bool(lf["key"]), "built_in_key": bool(self.settings.built_in_key)}
-            return self.send_json({**self.hub.snapshot(), "urls": remote_urls(), "lastfm": lastfm})
+            # a Spotify Client ID is public (it names the app); the phones keep their own tokens
+            spotify = {"client_id": self.settings.spotify_client_id()}
+            return self.send_json({**self.hub.snapshot(), "urls": remote_urls(), "lastfm": lastfm, "spotify": spotify})
         if p == "/api/lastfm" and self.from_this_pi():  # with the key: for the TV page only
             return self.send_json(self.settings.lastfm())
         if p == "/api/qr.svg":
@@ -303,6 +322,12 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json({"error": "a Last.fm API key is 32 letters and digits"}, HTTPStatus.BAD_REQUEST)
                 self.settings.set_lastfm(user, key)
                 arg = None  # the TV page fetches it from /api/lastfm: the key stays off the network
+            if cmd == "spotify-app":
+                cid = str((arg or {}).get("client_id") or "").strip().lower() if isinstance(arg, dict) else None
+                if cid is None or (cid and not SPOTIFY_CLIENT_ID.fullmatch(cid)):
+                    return self.send_json({"error": "a Spotify Client ID is 32 letters and digits"}, HTTPStatus.BAD_REQUEST)
+                self.settings.set_spotify_client_id(cid)
+                arg = None
             if cmd == "audio":
                 set_default_input(arg)
             self.hub.publish({"cmd": cmd, "arg": arg})

@@ -169,6 +169,15 @@ class ServerTest(unittest.TestCase):
                     {"user": "ok_user", "key": "not-a-key"}]:
             self.assertEqual(request("POST", "/api/cmd", {"cmd": "lastfm", "arg": arg})[0], 400, arg)
 
+    def test_spotify_client_id(self):
+        cid = "abcdef0123456789abcdef0123456789"
+        self.assertEqual(request("POST", "/api/cmd", {"cmd": "spotify-app", "arg": {"client_id": cid.upper()}})[0], 200)
+        self.assertEqual(json.loads(request("GET", "/api/state")[2])["spotify"], {"client_id": cid})
+        for arg in [None, "x", {"client_id": "short"}]:
+            self.assertEqual(request("POST", "/api/cmd", {"cmd": "spotify-app", "arg": arg})[0], 400, arg)
+        request("POST", "/api/cmd", {"cmd": "spotify-app", "arg": {"client_id": ""}})
+        self.assertEqual(json.loads(request("GET", "/api/state")[2])["spotify"], {"client_id": ""})
+
     def test_qr(self):
         status, headers, body = request("GET", "/api/qr.svg?text=http://ufoscene.local/")
         self.assertEqual(status, 200)

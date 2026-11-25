@@ -57,6 +57,37 @@
     Spotify Free plays them on shuffle, with ads.</p>
   <div id="playlists" class="playlists"></div>
 
+  <h2>Spotify control <span class="tag">optional</span></h2>
+  <p class="hint" id="sp-msg"></p>
+  <div id="sp-player" hidden>
+    <p class="hint" id="sp-now"></p>
+    <section class="row">
+      <button id="sp-prev" aria-label="Previous song">⏮</button>
+      <button id="sp-toggle">⏯</button>
+      <button id="sp-next" aria-label="Next song">⏭</button>
+    </section>
+    <p class="hint">Playlists above now start right away on the device that plays. <button type="button" class="link" id="sp-logout">Log out</button></p>
+  </div>
+  <div id="sp-login" hidden>
+    <p class="hint">See what plays, skip songs and start playlists from here. Needs Spotify Premium.</p>
+    <section class="row"><button id="sp-login-btn">Log in with Spotify</button></section>
+    <p class="hint"><button type="button" class="link" id="sp-change">Change Client ID</button></p>
+  </div>
+  <details id="sp-setup" hidden>
+    <summary>Set up (once, with your own Spotify app)</summary>
+    <ol class="hint">
+      <li>At <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">developer.spotify.com/dashboard</a>, create an app. Pick <b>Web API</b>.</li>
+      <li>Add this <b>Redirect URI</b>: <code id="sp-redirect"></code></li>
+      <li>Under <b>User Management</b>, add the Spotify accounts in your home that will use it (a new app allows only a few).</li>
+      <li>Paste the app's <b>Client ID</b>:</li>
+    </ol>
+    <form id="sp-app" class="stack">
+      <input id="sp-client" autocapitalize="off" spellcheck="false" maxlength="32" placeholder="32 letters and digits">
+      <div class="row"><button type="submit">Save</button><button type="button" id="sp-clear">Remove</button></div>
+    </form>
+    <p class="hint">The login happens in this phone's browser, and the tokens stay on this phone.</p>
+  </details>
+
   <h2>Song names</h2>
   <p class="hint" id="lfm-state"></p>
   <form id="lastfm" class="stack">

@@ -102,7 +102,17 @@ info, give the Pi only the sound. Link Spotify to Last.fm
 Last.fm username under **Song names** on the remote: ufoscene shows what you play, from any
 device, within about 10 seconds. Images built with the repository variable `LASTFM_API_KEY` have
 an API key built in; otherwise paste your own
-([last.fm/api/account/create](https://www.last.fm/api/account/create), free). (Up to 0.1 the Pi was a Spotify Connect speaker, but
+([last.fm/api/account/create](https://www.last.fm/api/account/create), free).
+
+**Playlists**: the remote lists ufoscene's playlists. Tapping one opens it in Spotify on the
+phone and switches the Pi to the phone; press play and pick UFOSCENE.
+
+**Spotify control (optional, Premium)**: with your own Spotify app (a Client ID from
+[developer.spotify.com](https://developer.spotify.com/dashboard), redirect URI
+`https://pi.ufoscene.net/spotify`), the remote shows what plays, skips songs and starts the
+playlists without leaving the page. The login runs in the phone's browser and the tokens stay on
+the phone; the Pi only keeps the Client ID. See [`docs/spotify-bounce/`](docs/spotify-bounce/)
+for the redirect page. Off until you set it up. (Up to 0.1 the Pi was a Spotify Connect speaker, but
 Spotify no longer lets [librespot](https://github.com/librespot-org/librespot/issues/1649) play.)
 
 ## How it works
