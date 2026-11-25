@@ -10,6 +10,7 @@ These two files are that page, for the ufoscene-site repository to serve:
 |---|---|
 | `spotify.html` | `GET /spotify` (any query string), `text/html` |
 | `spotify-bounce.js` | `GET /static/spotify-bounce.js` |
+| `spotify-bounce.css` | `GET /static/spotify-bounce.css` (no inline style, for `style-src 'self'`) |
 
 What the page does: it reads the state (`<nonce>.<base64url(origin)>`) and forwards `code`,
 `state` and `error` in the **fragment** to that origin. The origin may only be `http://` on a
@@ -25,3 +26,6 @@ Requirements for the site:
   IP, which `navigate-to` (unsupported) or `default-src` doesn't block. No `form-action` is
   needed.
 - `Referrer-Policy: no-referrer` (also set in the page).
+
+Served by ufoscene-site since commit 8c28346 (branch m1-marketplace): app logs record the path
+only. The qloudpulse ALB/ingress access logs still see `?code=`; that is qloudpulse's config.
