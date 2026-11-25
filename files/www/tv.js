@@ -70,6 +70,8 @@ async function showConnect(ms = CONNECT_SHOW_MS) {
     const s = await (await fetch('/api/state')).json();
     $('url-mdns').textContent = s.urls.mdns;
     $('url-ip').textContent = s.urls.ip ? `or ${s.urls.ip}` : '';
+    // the release this Pi runs (the build writes the tag into server.py), e.g. v0.2.0-rc6
+    $('tv-version').textContent = s.version ? `ufoscene-pi ${s.version}` : '';
     $('qr').src = `/api/qr.svg?text=${encodeURIComponent(s.urls.ip || s.urls.mdns)}`;
   } catch {}
   overlay.hidden = false;
