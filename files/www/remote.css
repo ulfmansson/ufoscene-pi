@@ -67,3 +67,4 @@ button.link { min-height: 0; padding: 0; border: 0; background: none; color: var
 details summary { cursor: pointer; color: var(--c3); margin: 6px 2px; }
 code { font-size: .8rem; color: var(--c3); word-break: break-all; }
 ol.hint { padding-left: 22px; }
+#wifi-form > .row:last-child { grid-template-columns: 1fr; }

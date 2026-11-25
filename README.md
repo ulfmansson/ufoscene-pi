@@ -33,7 +33,9 @@ You only need the official [Raspberry Pi Imager](https://www.raspberrypi.com/sof
 3. In the customisation step, set:
    - **Hostname:** `ufoscene` (then the remote is at `http://ufoscene.local/`)
    - **Username and password**, so you can log in over SSH if you ever need to
-   - **Wi-Fi:** your network name and password (not needed with an Ethernet cable)
+   - **Wi-Fi:** your network name and password (not needed with an Ethernet cable). If you skip
+     it, or the Wi-Fi changes later, the Pi opens a setup network after two minutes (see
+     **Wi-Fi** below).
 4. Write the card, put it in the Pi, connect HDMI to the TV and power it up. The first boot
    takes a few minutes; then the demos start, with a QR code for the remote.
 
@@ -115,12 +117,27 @@ the phone; the Pi only keeps the Client ID. See [`docs/spotify-bounce/`](docs/sp
 for the redirect page. Off until you set it up. (Up to 0.1 the Pi was a Spotify Connect speaker, but
 Spotify no longer lets [librespot](https://github.com/librespot-org/librespot/issues/1649) play.)
 
+**Wi-Fi**: under **Wi-Fi** on the remote, give the Pi a new network name and password. Press
+**Show code on TV** and type the six digits the TV shows: anyone on your network can open the
+remote, but only someone at the TV can change the Wi-Fi. The Pi keeps its old network until the
+new one has connected; with a wrong password nothing changes. If the new network is another one,
+join it with the phone too and open `http://ufoscene.local/` again.
+
+**No Wi-Fi** (the router got a new password, the Pi moved house, or Imager had no Wi-Fi): after
+two minutes without a known network the Pi opens its own network, **ufoscene-setup**, and the TV
+shows its password and two QR codes. Scan the first to join it, the second to open the remote
+(`http://10.42.0.1/`; most phones open it by themselves), and give your Wi-Fi under **Wi-Fi**.
+Every five minutes with no phone on it, the Pi tries its old Wi-Fi again, so a router that was
+only restarting brings it back by itself. With a network cable plugged in, it never opens the
+setup network. Needs NetworkManager (Raspberry Pi OS Bookworm and later).
+
 ## How it works
 
 | Part | Where |
 |---|---|
 | `install.sh` | installs everything on Raspberry Pi OS Lite. The image build runs the same script. |
 | `files/server.py` | a small server on port 80 (Python, standard library). It serves ufoscene, the TV page and the remote, and passes remote commands to the TV over server-sent events. |
+| `files/wifi.py` | runs as root: joins the network the remote gave (going back to the old one if it fails) and opens the setup network when the Pi is offline. It only takes requests from `server.py` on the Pi itself, through NetworkManager's `nmcli`. |
 | `files/www/tv.*` | the TV page. It runs ufoscene in a frame and presses its keys for the remote. |
 | `files/www/remote.*` | the phone remote |
 | `files/kiosk.sh`, `files/systemd/` | Chromium in kiosk mode under [cage](https://github.com/cage-kiosk/cage) on the TV |

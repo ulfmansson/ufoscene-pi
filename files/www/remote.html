@@ -109,6 +109,28 @@
     </div>
   </form>
 
+  <section id="wifi" hidden>
+    <h2>Wi-Fi</h2>
+    <p class="hint" id="wifi-now"></p>
+    <p class="hint" id="wifi-msg"></p>
+    <form id="wifi-form" class="stack" autocomplete="off">
+      <label for="wifi-ssid">Network name</label>
+      <input id="wifi-ssid" list="wifi-nets" autocapitalize="off" spellcheck="false" maxlength="32" required>
+      <datalist id="wifi-nets"></datalist>
+      <label for="wifi-psk">Password</label>
+      <input id="wifi-psk" type="password" autocapitalize="off" spellcheck="false" minlength="8" maxlength="64" required>
+      <label for="wifi-code">Code from the TV</label>
+      <div class="row">
+        <input id="wifi-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="6 digits" required>
+        <button type="button" id="wifi-code-btn">Show code on TV</button>
+      </div>
+      <div class="row"><button type="submit">Change Wi-Fi</button></div>
+    </form>
+    <p class="hint">The Pi keeps its current Wi-Fi until the new one works. If the new network is
+      another one than this phone is on, join it with the phone too and open
+      <b id="wifi-mdns">http://ufoscene.local/</b> again.</p>
+  </section>
+
   <h2>Screen</h2>
   <section class="row">
     <button data-cmd="hud">Info</button>

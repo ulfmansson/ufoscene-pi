@@ -6,6 +6,8 @@
 * passes remote commands to the TV page as server-sent events (/api/events)
 * collects state from the TV page (/api/state) and from the phone speakers, Bluetooth and
   AirPlay (/api/nowplaying, /api/bluetooth; phone.py sends those)
+* takes a new Wi-Fi network from the remote, confirmed with a code shown on the TV, and hands it
+  to wifi.py, which runs as root and does the change (/api/wifi*)
 
 Standard library only, plus python3-qrcode for the QR code on the TV.
 """
@@ -19,6 +21,7 @@ import mimetypes
 import os
 import queue
 import re
+import secrets
 import socket
 import threading
 import time
@@ -45,6 +48,126 @@ PHONE_SOURCES = {"bluetooth", "airplay"}
 LASTFM_USER = re.compile(r"[A-Za-z][A-Za-z0-9_-]{1,14}")  # Last.fm's own rule
 LASTFM_KEY = re.compile(r"[0-9a-f]{32}")
 SPOTIFY_CLIENT_ID = re.compile(r"[0-9a-f]{32}")
+WIFI_PSK = re.compile(r"[\x20-\x7e]{8,63}|[0-9a-fA-F]{64}")  # WPA2: a passphrase, or the key in hex
+SETUP_IP = "10.42.0.1"  # the Pi on its own setup network (wifi.py)
+
+
+def valid_wifi(ssid, psk) -> bool:
+    return (
+        isinstance(ssid, str) and isinstance(psk, str)
+        and 1 <= len(ssid.encode()) <= 32 and not any(ord(c) < 32 for c in ssid)
+        and WIFI_PSK.fullmatch(psk) is not None
+    )
+
+
+class Wifi:
+    """A Wi-Fi change from the remote, on its way to wifi.py.
+
+    Anyone on the network can open the remote, so a change needs a code that only the TV shows:
+    six digits, good for five minutes and three tries, and a new one at most every 30 seconds.
+    The password goes to wifi.py once and is never sent back to a phone. The setup network's
+    password (wifi.py opens that network when the Pi is offline) only goes to the TV page.
+    """
+
+    CODE_S = 300
+    CODE_GAP_S = 30
+    TRIES = 3
+
+    def __init__(self, clock=time.monotonic):
+        self.clock = clock
+        self.lock = threading.Lock()
+        self.status: dict | None = None  # from wifi.py
+        self.setup: dict | None = None  # {"ssid", "password", "ip"} while the setup network is open
+        self.pending: dict | None = None
+        self.code = ""
+        self.code_at = -1e9
+        self.tries = 0
+
+    def public(self) -> dict | None:
+        with self.lock:
+            if self.status is None:
+                return None
+            s = dict(self.status)
+            s["setup"] = {"ssid": self.setup["ssid"], "ip": self.setup["ip"]} if self.setup else None
+            s["pending"] = self.pending is not None
+            return s
+
+    def in_setup(self) -> bool:
+        with self.lock:
+            return bool(self.setup)
+
+    def set_status(self, body: dict) -> dict | None:
+        nets = []
+        for n in body.get("networks") or []:
+            if isinstance(n, dict) and isinstance(n.get("ssid"), str) and 0 < len(n["ssid"]) <= 32:
+                sig = n.get("signal")
+                nets.append({"ssid": n["ssid"], "signal": sig if isinstance(sig, int) else 0, "secure": bool(n.get("secure"))})
+        last = body.get("last")
+        if isinstance(last, dict):
+            last = {k: str(last.get(k) or "")[:200] for k in ("result", "ssid", "error")}
+        else:
+            last = None
+        setup = body.get("setup")
+        with self.lock:
+            self.status = {
+                "available": bool(body.get("available")),
+                "state": str(body.get("state") or "")[:20],
+                "ssid": str(body.get("ssid") or "")[:64],
+                "cable": bool(body.get("cable")),
+                "networks": nets[:20],
+                "last": last,
+            }
+            self.setup = (
+                {k: str(setup.get(k) or "")[:64] for k in ("ssid", "password", "ip")} if isinstance(setup, dict) else None
+            )
+        return self.public()
+
+    def new_code(self) -> bool:
+        """A code for the TV: the one still good, or a new one. False when the last one was used
+        up less than 30 seconds after it was made (someone guessing)."""
+        with self.lock:
+            now = self.clock()
+            if self.code and now - self.code_at < self.CODE_S:
+                return True  # the TV shows the same code again
+            if now - self.code_at < self.CODE_GAP_S:
+                return False
+            self.code = f"{secrets.randbelow(10**6):06d}"
+            self.code_at = now
+            self.tries = 0
+            return True
+
+    def code_for_tv(self) -> dict:
+        with self.lock:
+            left = self.CODE_S - (self.clock() - self.code_at)
+            if not self.code or left <= 0:
+                return {}
+            return {"code": self.code, "seconds": int(left)}
+
+    def submit(self, ssid, psk, code) -> tuple[int, str]:
+        if not valid_wifi(ssid, psk):
+            return 400, "A network name is 1 to 32 characters, and a Wi-Fi password 8 to 63."
+        with self.lock:
+            if self.status is None or not self.status.get("available"):
+                return 409, "This Pi has no Wi-Fi it can change."
+            if self.pending is not None or self.status.get("state") == "connecting":
+                return 409, "The Pi is already changing its Wi-Fi."
+            if not self.code or self.clock() - self.code_at >= self.CODE_S:
+                self.code = ""
+                return 403, "Ask for a code on the TV first."
+            if not (isinstance(code, str) and secrets.compare_digest(code.strip(), self.code)):
+                self.tries += 1
+                if self.tries >= self.TRIES:
+                    self.code = ""
+                    return 403, "Wrong code. Ask for a new one."
+                return 403, f"Wrong code. {self.TRIES - self.tries} more tries."
+            self.code = ""
+            self.pending = {"ssid": ssid, "psk": psk}
+            return 200, ""
+
+    def take(self) -> dict:
+        with self.lock:
+            p, self.pending = self.pending, None
+            return p or {}
 
 
 class Settings:
@@ -212,6 +335,7 @@ class Handler(BaseHTTPRequestHandler):
     server_version = f"ufoscene-pi/{VERSION}"
     hub: Hub
     settings: "Settings"
+    wifi: Wifi
     www: Path
     ufo: Path
 
@@ -265,9 +389,27 @@ class Handler(BaseHTTPRequestHandler):
     def do_HEAD(self):
         self.do_GET()
 
+    def captive(self) -> bool:
+        """On the setup network every name leads to the Pi (dnsmasq): send phones checking for
+        internet to the remote, so they open it by themselves."""
+        if self.from_this_pi() or not self.wifi.in_setup():
+            return False
+        host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]").lower()
+        name = socket.gethostname().split(".")[0].lower()
+        if host in ("", SETUP_IP, name, f"{name}.local", "localhost", "127.0.0.1", "::1", local_ip()):
+            return False
+        self.send_response(HTTPStatus.FOUND)
+        self.send_header("Location", f"http://{SETUP_IP}/")
+        self.send_header("Content-Length", "0")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        return True
+
     def do_GET(self):
         url = urlparse(self.path)
         p = url.path
+        if self.captive():
+            return
         if p in ("/", "/remote"):
             return self.send_file(self.www, "remote.html")
         if p == "/tv":
@@ -286,9 +428,18 @@ class Handler(BaseHTTPRequestHandler):
             lastfm = {"user": lf["user"], "key": bool(lf["key"]), "built_in_key": bool(self.settings.built_in_key)}
             # a Spotify Client ID is public (it names the app); the phones keep their own tokens
             spotify = {"client_id": self.settings.spotify_client_id()}
-            return self.send_json({**self.hub.snapshot(), "urls": remote_urls(), "lastfm": lastfm, "spotify": spotify})
+            return self.send_json({**self.hub.snapshot(), "urls": remote_urls(), "lastfm": lastfm, "spotify": spotify,
+                                   "wifi": self.wifi.public()})
         if p == "/api/lastfm" and self.from_this_pi():  # with the key: for the TV page only
             return self.send_json(self.settings.lastfm())
+        # for the TV page and wifi.py on the Pi itself
+        if p == "/api/wifi/code" and self.from_this_pi():
+            return self.send_json(self.wifi.code_for_tv())
+        if p == "/api/wifi/setup" and self.from_this_pi():
+            with self.wifi.lock:
+                return self.send_json(self.wifi.setup or {})
+        if p == "/api/wifi/pending" and self.from_this_pi():
+            return self.send_json(self.wifi.take())
         if p == "/api/qr.svg":
             text = parse_qs(url.query).get("text", [remote_urls()["mdns"]])[0][:200]
             return self.send_bytes(qr_svg(text), "image/svg+xml")
@@ -332,7 +483,28 @@ class Handler(BaseHTTPRequestHandler):
                 set_default_input(arg)
             self.hub.publish({"cmd": cmd, "arg": arg})
             return self.send_json({"ok": True})
-        # The two below are only for programs on the Pi itself.
+        if p == "/api/wifi/code":
+            if not (self.wifi.public() or {}).get("available"):
+                return self.send_json({"error": "This Pi has no Wi-Fi it can change."}, HTTPStatus.CONFLICT)
+            if not self.wifi.new_code():
+                return self.send_json({"error": "A code was just made: wait half a minute."}, HTTPStatus.TOO_MANY_REQUESTS)
+            self.hub.publish({"cmd": "wifi-code", "arg": None})  # the TV fetches it: not on the network
+            return self.send_json({"ok": True})
+        if p == "/api/wifi":
+            body = self.read_json()
+            code, error = self.wifi.submit(body.get("ssid"), body.get("psk"), body.get("code"))
+            if error:
+                return self.send_json({"error": error}, code)
+            self.hub.publish({"cmd": "wifi", "arg": self.wifi.public()})
+            return self.send_json({"ok": True})
+        # The ones below are only for programs on the Pi itself.
+        if p == "/api/wifi/status" and self.from_this_pi():
+            before = self.wifi.public()
+            now = self.wifi.set_status(self.read_json())
+            keys = ("state", "ssid", "last", "setup", "available")
+            if before is None or any(before.get(k) != now.get(k) for k in keys):
+                self.hub.publish({"cmd": "wifi", "arg": now})
+            return self.send_json({"ok": True})
         if p == "/api/state" and self.from_this_pi():
             body = self.read_json()
             allowed = {k: body[k] for k in ("fps", "audio", "demo") if k in body}
@@ -407,6 +579,7 @@ def main():
     Path(a.state).mkdir(parents=True, exist_ok=True)
     Handler.settings = Settings(Path(a.state) / "settings.json", built_in)
     Handler.hub = Hub()
+    Handler.wifi = Wifi()
     Handler.www = Path(a.www)
     Handler.ufo = Path(a.ufo)
 

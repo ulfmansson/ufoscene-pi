@@ -23,6 +23,30 @@
   </div>
 </section>
 
+<!-- No Wi-Fi: the Pi opened its setup network (wifi.py). Join it, then open the remote. -->
+<section id="wifi-setup" class="overlay" hidden>
+  <div class="card setup">
+    <h1>NO WI-FI</h1>
+    <p class="big">The Pi can't reach its Wi-Fi. Give it a new one from your phone:</p>
+    <div class="steps">
+      <figure>
+        <img id="wifi-join-qr" alt="" width="200" height="200">
+        <figcaption>1. Scan to join <b id="wifi-setup-ssid"></b><br>password <b id="wifi-setup-pw"></b></figcaption>
+      </figure>
+      <figure>
+        <img id="wifi-remote-qr" alt="" width="200" height="200">
+        <figcaption>2. Scan to open the remote<br><b id="wifi-setup-url"></b>, then <b>Wi-Fi</b></figcaption>
+      </figure>
+    </div>
+    <p class="small">With no phone on it, the Pi tries its old Wi-Fi again every five minutes.</p>
+  </div>
+</section>
+
+<!-- A Wi-Fi change asked for on the remote: the code to type there -->
+<section id="wifi-code" class="pairing" hidden>
+  Wi-Fi change on the remote: code <b id="wifi-code-digits"></b>
+</section>
+
 <!-- Bluetooth pairing is open (Pair on the remote) -->
 <section id="pairing" class="pairing" hidden>
   <b>Bluetooth</b>: on your phone, open Bluetooth settings and pick <b>UFOSCENE</b>

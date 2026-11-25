@@ -6,6 +6,8 @@
 # On a Pi that already runs Raspberry Pi OS Lite:
 #   curl -fsSL https://raw.githubusercontent.com/ulfmansson/ufoscene-pi/main/install.sh | sudo bash
 #
+# The remote can change the Pi's Wi-Fi, and with no Wi-Fi it opens a setup network (NetworkManager).
+#
 # The image build runs the same script inside the image (--image).
 #
 # Options:
@@ -26,7 +28,7 @@ while [[ $# -gt 0 ]]; do
     --image) IMAGE=1 ;;
     --bundle) BUNDLE="$2"; shift ;;
     --bundle-url) BUNDLE_URL="$2"; shift ;;
-    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
   shift
@@ -63,10 +65,12 @@ apt-get install -y -qq --no-install-recommends \
   cage "$CHROMIUM" \
   pipewire pipewire-pulse wireplumber pulseaudio-utils libspa-0.2-bluetooth rtkit \
   bluez python3-dbus python3-gi shairport-sync \
-  python3 python3-qrcode avahi-daemon libnss-mdns \
+  python3 python3-qrcode avahi-daemon libnss-mdns iw \
   fonts-dejavu-core curl ca-certificates
 # the Pi 3 and 4 radio needs Raspberry Pi's Bluetooth helper (already in Raspberry Pi OS)
 if apt-cache show pi-bluetooth >/dev/null 2>&1; then apt-get install -y -qq --no-install-recommends pi-bluetooth; fi
+# the Wi-Fi setup network: NetworkManager shares it with dnsmasq (Raspberry Pi OS since Bookworm)
+if dpkg -s network-manager >/dev/null 2>&1; then apt-get install -y -qq --no-install-recommends dnsmasq-base; fi
 # shairport-sync's own service plays as its own user; ours plays into the kiosk user's PipeWire
 systemctl disable --now shairport-sync.service >/dev/null 2>&1 || true
 systemctl mask shairport-sync.service >/dev/null 2>&1 || true
@@ -103,7 +107,7 @@ mkdir -p "$PREFIX.new"
 cp -r "$WORK/files/." "$PREFIX.new/"
 cp -r "$WORK/ufo" "$PREFIX.new/ufo"
 [[ -f "$WORK/VERSION" ]] && cp "$WORK/VERSION" "$PREFIX.new/VERSION"
-chmod 755 "$PREFIX.new/server.py" "$PREFIX.new/kiosk.sh" "$PREFIX.new/phone.py"
+chmod 755 "$PREFIX.new/server.py" "$PREFIX.new/kiosk.sh" "$PREFIX.new/phone.py" "$PREFIX.new/wifi.py"
 rm -rf "$PREFIX.old"
 [[ -d "$PREFIX" ]] && mv "$PREFIX" "$PREFIX.old"
 mv "$PREFIX.new" "$PREFIX"
@@ -121,6 +125,12 @@ if [[ -f /etc/bluetooth/main.conf ]]; then
   grep -q '^Class = 0x000414' /etc/bluetooth/main.conf || sed -i '/^\[General\]/a Class = 0x000414' /etc/bluetooth/main.conf
 fi
 
+# the Wi-Fi setup network sends phones to the remote
+if [[ -d /etc/NetworkManager ]]; then
+  mkdir -p /etc/NetworkManager/dnsmasq-shared.d
+  cp "$PREFIX/networkmanager/ufoscene-setup.conf" /etc/NetworkManager/dnsmasq-shared.d/ufoscene-setup.conf
+fi
+
 # sound through HDMI (the TV) before the headphone jack, at full volume
 mkdir -p /etc/wireplumber/wireplumber.conf.d
 cp "$PREFIX"/wireplumber/*.conf /etc/wireplumber/wireplumber.conf.d/
@@ -134,7 +144,7 @@ done
 say "Booting straight into ufoscene"
 systemctl disable getty@tty1.service >/dev/null 2>&1 || true
 systemctl enable ufoscene-server.service ufoscene-kiosk.service avahi-daemon.service \
-  bluetooth.service ufoscene-phone.service ufoscene-airplay.service
+  bluetooth.service ufoscene-phone.service ufoscene-airplay.service ufoscene-wifi.service
 systemctl set-default multi-user.target >/dev/null
 
 # quiet boot: no rainbow square, no console text before the demos
@@ -154,7 +164,7 @@ else
   systemctl reload dbus.service >/dev/null 2>&1 || true
   systemctl restart bluetooth.service >/dev/null 2>&1 || true
   systemctl restart ufoscene-server.service
-  systemctl restart ufoscene-phone.service ufoscene-airplay.service
+  systemctl restart ufoscene-phone.service ufoscene-airplay.service ufoscene-wifi.service
   systemctl restart ufoscene-kiosk.service
   say "Done. ufoscene is starting on the TV; the remote is at http://$(hostname).local/"
 fi

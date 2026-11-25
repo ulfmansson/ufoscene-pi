@@ -1,0 +1,17 @@
+[Unit]
+Description=ufoscene Wi-Fi: a new network from the remote, a setup network when offline
+After=NetworkManager.service ufoscene-server.service
+Wants=NetworkManager.service
+
+[Service]
+# root: it changes NetworkManager's networks. It only takes requests from server.py on this Pi.
+ExecStart=/usr/bin/python3 @PREFIX@/wifi.py
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -41,10 +41,10 @@ class _Writer(io.RawIOBase):
         return len(b)
 
 
-def request(method, path, body=None, client="192.168.1.20"):
+def request(method, path, body=None, client="192.168.1.20", host="ufoscene.local"):
     data = b"" if body is None else json.dumps(body).encode()
     raw = (
-        f"{method} {path} HTTP/1.1\r\nHost: ufoscene.local\r\n"
+        f"{method} {path} HTTP/1.1\r\nHost: {host}\r\n"
         f"Content-Type: application/json\r\nContent-Length: {len(data)}\r\nConnection: close\r\n\r\n"
     ).encode() + data
     sock = FakeSocket(raw)
@@ -75,6 +75,8 @@ class ServerTest(unittest.TestCase):
 
     def setUp(self):
         server.Handler.hub = server.Hub()
+        self.clock = [1000.0]
+        server.Handler.wifi = server.Wifi(clock=lambda: self.clock[0])
         server.Handler.settings = server.Settings(Path(self.tmp.name) / "settings.json")
 
     def test_pages(self):
@@ -183,6 +185,95 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue(headers["Content-Type"].startswith("image/svg+xml"))
         self.assertIn(b"<svg", body)
+
+    # ---------------------------------------------------------------- Wi-Fi
+
+    PI = "127.0.0.1"
+
+    def wifi_status(self, **kv):
+        body = {"available": True, "state": "connected", "ssid": "Home", "cable": False,
+                "networks": [{"ssid": "Home", "signal": 80, "secure": True}], "last": None, "setup": None, **kv}
+        self.assertEqual(request("POST", "/api/wifi/status", body, client=self.PI)[0], 200)
+
+    def code(self):
+        self.assertEqual(request("POST", "/api/wifi/code")[0], 200)
+        return json.loads(request("GET", "/api/wifi/code", client=self.PI)[2])["code"]
+
+    def test_wifi_needs_the_helper(self):
+        self.assertIsNone(json.loads(request("GET", "/api/state")[2])["wifi"])
+        self.assertEqual(request("POST", "/api/wifi/code")[0], 409)
+        self.assertEqual(request("POST", "/api/wifi", {"ssid": "Home", "psk": "12345678", "code": "1"})[0], 409)
+
+    def test_wifi_helper_endpoints_only_from_the_pi(self):
+        for method, path in [("POST", "/api/wifi/status"), ("GET", "/api/wifi/code"),
+                             ("GET", "/api/wifi/setup"), ("GET", "/api/wifi/pending")]:
+            self.assertEqual(request(method, path, {"available": True} if method == "POST" else None)[0], 404, path)
+
+    def test_wifi_change_with_the_code_from_the_tv(self):
+        q = server.Handler.hub.subscribe()
+        self.wifi_status()
+        self.assertEqual(q.get_nowait()["cmd"], "wifi")
+        code = self.code()
+        self.assertEqual(q.get_nowait(), {"cmd": "wifi-code", "arg": None})  # the code is not broadcast
+        self.assertRegex(code, r"^[0-9]{6}$")
+        self.assertEqual(self.code(), code)  # asking again shows the same code
+        ok = request("POST", "/api/wifi", {"ssid": "Cabin", "psk": "cabin password", "code": code})
+        self.assertEqual(ok[0], 200, ok[2])
+        self.assertTrue(json.loads(request("GET", "/api/state")[2])["wifi"]["pending"])
+        self.assertNotIn(b"cabin password", request("GET", "/api/state")[2])
+        self.assertEqual(request("POST", "/api/wifi", {"ssid": "Cabin", "psk": "cabin password", "code": code})[0], 409)
+        # wifi.py takes it, once
+        self.assertEqual(json.loads(request("GET", "/api/wifi/pending", client=self.PI)[2]), {"ssid": "Cabin", "psk": "cabin password"})
+        self.assertEqual(json.loads(request("GET", "/api/wifi/pending", client=self.PI)[2]), {})
+        # the code is used up
+        self.wifi_status()
+        self.assertEqual(request("POST", "/api/wifi", {"ssid": "Cabin", "psk": "cabin password", "code": code})[0], 403)
+
+    def test_wifi_wrong_codes(self):
+        self.wifi_status()
+        code = self.code()
+        wrong = f"{(int(code) + 1) % 10**6:06d}"
+        for _ in range(3):
+            self.assertEqual(request("POST", "/api/wifi", {"ssid": "Cabin", "psk": "cabin password", "code": wrong})[0], 403)
+        # three wrong tries void it, even the right code no longer works
+        self.assertEqual(request("POST", "/api/wifi", {"ssid": "Cabin", "psk": "cabin password", "code": code})[0], 403)
+        self.assertEqual(json.loads(request("GET", "/api/wifi/code", client=self.PI)[2]), {})
+        self.assertEqual(request("POST", "/api/wifi/code")[0], 429)  # not right away
+        self.clock[0] += 31
+        self.assertEqual(request("POST", "/api/wifi/code")[0], 200)
+
+    def test_wifi_code_expires(self):
+        self.wifi_status()
+        code = self.code()
+        self.clock[0] += 301
+        self.assertEqual(json.loads(request("GET", "/api/wifi/code", client=self.PI)[2]), {})
+        self.assertEqual(request("POST", "/api/wifi", {"ssid": "Cabin", "psk": "cabin password", "code": code})[0], 403)
+
+    def test_wifi_bad_input(self):
+        self.wifi_status()
+        code = self.code()
+        for body in [{"ssid": "", "psk": "12345678"}, {"ssid": "x" * 33, "psk": "12345678"},
+                     {"ssid": "Home", "psk": "short"}, {"ssid": "Home", "psk": "x" * 64},
+                     {"ssid": ["Home"], "psk": "12345678"}, {"ssid": "a\nb", "psk": "12345678"}]:
+            self.assertEqual(request("POST", "/api/wifi", {**body, "code": code})[0], 400, body)
+
+    def test_wifi_setup_network(self):
+        q = server.Handler.hub.subscribe()
+        self.wifi_status(state="setup", ssid="ufoscene-setup",
+                         setup={"ssid": "ufoscene-setup", "password": "k3mp2qrstu", "ip": "10.42.0.1"})
+        ev = q.get_nowait()
+        self.assertEqual(ev["arg"]["setup"], {"ssid": "ufoscene-setup", "ip": "10.42.0.1"})
+        # its password only for the TV page
+        self.assertNotIn(b"k3mp2qrstu", request("GET", "/api/state", host="10.42.0.1")[2])
+        self.assertEqual(json.loads(request("GET", "/api/wifi/setup", client=self.PI)[2])["password"], "k3mp2qrstu")
+        # a phone checking for internet is sent to the remote; the remote itself is served
+        status, headers, _ = request("GET", "/generate_204", client="10.42.0.23", host="connectivitycheck.gstatic.com")
+        self.assertEqual((status, headers.get("Location")), (302, "http://10.42.0.1/"))
+        self.assertEqual(request("GET", "/", client="10.42.0.23", host="10.42.0.1")[0], 200)
+        self.assertEqual(request("GET", "/tv", client=self.PI, host="captive.apple.com")[0], 200)
+        # with the Pi on its Wi-Fi again, no more redirects
+        self.wifi_status()
+        self.assertEqual(request("GET", "/generate_204", host="connectivitycheck.gstatic.com")[0], 404)
 
 
 if __name__ == "__main__":

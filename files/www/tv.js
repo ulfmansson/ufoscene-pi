@@ -203,8 +203,70 @@ function handle({ cmd, arg }) {
     case 'reload':
       location.reload();
       break;
+    case 'wifi-code':
+      wifiCode();
+      break;
+    case 'wifi':
+      wifiState(arg);
+      break;
   }
 }
+
+// ------------------------------------------------------------ Wi-Fi
+
+// The code a Wi-Fi change on the remote needs. Fetched from the Pi itself, never broadcast.
+async function wifiCode() {
+  try {
+    const c = await (await fetch('/api/wifi/code', { cache: 'no-store' })).json();
+    if (!c.code) return;
+    $('wifi-code-digits').textContent = c.code;
+    $('wifi-code').hidden = false;
+    clearTimeout(wifiCode.t);
+    wifiCode.t = setTimeout(() => ($('wifi-code').hidden = true), c.seconds * 1000);
+  } catch {}
+}
+
+// QR code text to join a Wi-Fi network; \ ; , : " are escaped
+const wifiQr = (ssid, pw) => {
+  const esc = (s) => s.replace(/([\\;,:"])/g, '\\$1');
+  return `WIFI:T:WPA;S:${esc(ssid)};P:${esc(pw)};;`;
+};
+const qr = (text) => `/api/qr.svg?text=${encodeURIComponent(text)}`;
+
+let lastWifi = null;
+async function wifiState(w) {
+  if (!w) return;
+  if (w.state === 'connecting') $('wifi-code').hidden = true;
+  const box = $('wifi-setup');
+  if (w.state === 'setup' && w.setup) {
+    try {
+      const s = await (await fetch('/api/wifi/setup', { cache: 'no-store' })).json();
+      if (s.password) {
+        $('wifi-setup-ssid').textContent = s.ssid;
+        $('wifi-setup-pw').textContent = s.password;
+        $('wifi-setup-url').textContent = `http://${s.ip}/`;
+        $('wifi-join-qr').src = qr(wifiQr(s.ssid, s.password));
+        $('wifi-remote-qr').src = qr(`http://${s.ip}/`);
+        box.hidden = false;
+        overlay.hidden = true;
+      }
+    } catch {}
+  } else box.hidden = true;
+  const last = JSON.stringify(w.last);
+  if (lastWifi !== null && last !== lastWifi && w.last) {
+    say(w.last.result === 'joined' ? `Wi-Fi: joined ${w.last.ssid}` : `Wi-Fi: ${w.last.error}`, 8000);
+  }
+  lastWifi = last;
+  if (w.state === 'connecting') say(`Wi-Fi: joining ${w.ssid}…`, 60_000);
+}
+// the state at start, and now and then in case an event was missed while reconnecting
+async function pollWifi() {
+  try {
+    wifiState((await (await fetch('/api/state', { cache: 'no-store' })).json()).wifi);
+  } catch {}
+}
+pollWifi();
+setInterval(pollWifi, 15_000);
 
 let lastSong = '';
 let lastDevice = null;
