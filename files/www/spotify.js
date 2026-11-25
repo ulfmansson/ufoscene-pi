@@ -200,8 +200,16 @@ export const pause = () => api('PUT', '/me/player/pause');
 export const next = () => api('POST', '/me/player/next');
 export const previous = () => api('POST', '/me/player/previous');
 
-/** Start a playlist (an open.spotify.com/playlist/… link) on the device that is playing. */
-export function playPlaylist(link) {
-  const id = new URL(link).pathname.split('/').filter(Boolean).pop();
-  return api('PUT', '/me/player/play', { context_uri: `spotify:playlist:${id}` });
+/** spotify:playlist:… or spotify:album:… for an open.spotify.com link; '' for anything else. */
+export function contextUri(link) {
+  const m = /^https:\/\/open\.spotify\.com\/(?:intl-[a-z-]+\/)?(playlist|album)\/([A-Za-z0-9]+)(?:[/?#]|$)/.exec(String(link));
+  return m ? `spotify:${m[1]}:${m[2]}` : '';
 }
+
+/** Start a playlist or an album (an open.spotify.com link) on the device that is playing. */
+export function playLink(link) {
+  const uri = contextUri(link);
+  if (!uri) return Promise.reject(new SpotifyError('That is not a Spotify playlist or album.', 'BAD_LINK'));
+  return api('PUT', '/me/player/play', { context_uri: uri });
+}
+export const playPlaylist = playLink;
