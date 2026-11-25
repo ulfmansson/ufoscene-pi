@@ -5,6 +5,9 @@
 #
 # The ufoscene checkout must already have its wasm built (cargo build -p ufo-demo --release
 # --target wasm32-unknown-unknown); this copies it in.
+#
+# LASTFM_API_KEY (optional): a Last.fm API key built into the bundle, so people only type their
+# Last.fm username on the remote for song names. CI takes it from the repository variable.
 set -euo pipefail
 UFO=$(cd "$1" && pwd)
 OUT="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"
@@ -24,6 +27,10 @@ cp "$UFO/LICENSE" "$S/ufo/LICENSE"
 UFO_REV=$(git -C "$UFO" rev-parse --short HEAD 2>/dev/null || echo unknown)
 echo "ufoscene-pi $VERSION (ufoscene $UFO_REV)" > "$S/VERSION"
 sed -i.bak "s/^VERSION = .*/VERSION = \"$VERSION\"/" "$S/files/server.py" && rm "$S/files/server.py.bak"
+if [[ -n "${LASTFM_API_KEY:-}" ]]; then
+  [[ "$LASTFM_API_KEY" =~ ^[0-9a-f]{32}$ ]] || { echo "LASTFM_API_KEY is not a Last.fm API key" >&2; exit 1; }
+  printf '%s\n' "$LASTFM_API_KEY" > "$S/files/lastfm-api-key"
+fi
 find "$S" \( -name __pycache__ -o -name '.?*' \) -prune -exec rm -rf {} +
 tar -czf "$OUT" -C "$S" .
 ls -la "$OUT"

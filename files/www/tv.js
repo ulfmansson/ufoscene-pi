@@ -15,6 +15,28 @@ const seed = { 'ufo.guided': '1', 'ufo.tv': '1' };
 for (const [k, v] of Object.entries(seed)) if (localStorage.getItem(k) === null) localStorage.setItem(k, v);
 if (!localStorage.getItem('ufo.audio')) localStorage.setItem('ufo.audio', 'radio');
 
+// Song names from Last.fm (set on the remote): ufoscene reads these when it starts. The key comes
+// from the server on the Pi itself, never through the remote.
+async function applyLastfm() {
+  try {
+    const lf = await (await fetch('/api/lastfm', { cache: 'no-store' })).json();
+    if (lf.user && lf.key) {
+      localStorage.setItem('ufo.songs', 'lastfm');
+      localStorage.setItem('ufo.lastfm.user', lf.user);
+      localStorage.setItem('ufo.lastfm.key', lf.key);
+      localStorage.setItem('ufopi.lastfm', '1');
+      return lf.user;
+    }
+    if (localStorage.getItem('ufopi.lastfm')) {
+      localStorage.setItem('ufo.songs', 'none');
+      localStorage.removeItem('ufopi.lastfm');
+    }
+  } catch {}
+  return '';
+}
+const lastfmOn = () => localStorage.getItem('ufo.songs') === 'lastfm';
+applyLastfm().then(() => (frame.src = '/ufo/'));
+
 function say(text, ms = 3000) {
   toast.textContent = text;
   toast.style.opacity = 1;
@@ -151,7 +173,8 @@ function handle({ cmd, arg }) {
       // a phone plays to the Pi (Bluetooth or AirPlay): switch to it, and tell the demo the song
       const song = `${arg?.artist || ''}\u0000${arg?.title || ''}`;
       if (arg?.playing && localStorage.getItem('ufopi.audio') !== 'phone') setAudio('phone');
-      if ((arg?.artist || arg?.title) && song !== lastSong) {
+      // with Last.fm on, ufoscene gets the songs from there: two sources would fight over the demo
+      if ((arg?.artist || arg?.title) && song !== lastSong && !lastfmOn()) {
         lastSong = song;
         // after a switch ufoscene restarts its sound; give it a moment before the new song
         setTimeout(() => {
@@ -164,6 +187,13 @@ function handle({ cmd, arg }) {
     }
     case 'pair':
       pairing(true);
+      break;
+    case 'lastfm':
+      // ufoscene picks Last.fm up when it starts: reload it (it starts itself again)
+      applyLastfm().then((user) => {
+        frame.contentWindow?.location.reload();
+        say(user ? `Song names from Last.fm: ${user}` : 'Last.fm off', 4000);
+      });
       break;
     case 'bluetooth':
       if (!arg?.pairing) pairing(false);

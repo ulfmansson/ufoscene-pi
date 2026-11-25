@@ -50,6 +50,24 @@
   </section>
   <p class="hint" id="nowplaying"></p>
 
+  <h2>Song names</h2>
+  <p class="hint" id="lfm-state"></p>
+  <form id="lastfm" class="stack">
+    <p class="hint">Spotify on a computer sends no song names to the Pi. With
+      <a href="https://www.last.fm/settings/applications" target="_blank" rel="noopener">Spotify linked to Last.fm</a>,
+      ufoscene shows what you play anywhere.</p>
+    <label for="lfm-user">Last.fm username</label>
+    <input id="lfm-user" autocomplete="username" autocapitalize="off" spellcheck="false" maxlength="15">
+    <div id="lfm-key-row">
+      <label for="lfm-key">Last.fm API key (<a href="https://www.last.fm/api/account/create" target="_blank" rel="noopener">get one</a>)</label>
+      <input id="lfm-key" autocapitalize="off" spellcheck="false" maxlength="32" placeholder="32 letters and digits">
+    </div>
+    <div class="row">
+      <button type="submit">Save</button>
+      <button type="button" id="lfm-off">Turn off</button>
+    </div>
+  </form>
+
   <h2>Screen</h2>
   <section class="row">
     <button data-cmd="hud">Info</button>

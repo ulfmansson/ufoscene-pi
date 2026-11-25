@@ -10,12 +10,15 @@
 Standard library only, plus python3-qrcode for the QR code on the TV.
 """
 
+from __future__ import annotations
+
 import argparse
 import io
 import json
 import mimetypes
 import os
 import queue
+import re
 import socket
 import threading
 import time
@@ -33,11 +36,54 @@ mimetypes.add_type("image/svg+xml", ".svg")
 # Commands the phone may send. The TV page decides what each one does.
 COMMANDS = {
     "start", "next", "prev", "random", "scene", "song-next", "song-prev", "hud", "tv",
-    "panel", "demo", "audio", "overlay", "selftest", "reload", "pair",
+    "panel", "demo", "audio", "overlay", "selftest", "reload", "pair", "lastfm",
 }
 # phone: whatever a phone plays to the Pi over Bluetooth or AirPlay
 AUDIO_SOURCES = {"radio", "mic", "phone"}
 PHONE_SOURCES = {"bluetooth", "airplay"}
+LASTFM_USER = re.compile(r"[A-Za-z][A-Za-z0-9_-]{1,14}")  # Last.fm's own rule
+LASTFM_KEY = re.compile(r"[0-9a-f]{32}")
+
+
+class Settings:
+    """What the remote set that must survive a restart: the Last.fm username and API key.
+
+    The image may come with an API key for everyone (built_in_key); a key typed on the remote
+    takes its place. Keys never go out to the network, only to the TV page on the Pi itself.
+    """
+
+    def __init__(self, path: Path | None, built_in_key: str = ""):
+        self.path = path
+        self.built_in_key = built_in_key if LASTFM_KEY.fullmatch(built_in_key) else ""
+        self.lock = threading.Lock()
+        self.data = {}
+        if path and path.is_file():
+            try:
+                self.data = json.loads(path.read_text()) or {}
+            except (OSError, ValueError):
+                self.data = {}
+
+    def lastfm(self) -> dict:
+        with self.lock:
+            return {"user": self.data.get("lastfm_user") or "",
+                    "key": self.data.get("lastfm_key") or self.built_in_key}
+
+    def set_lastfm(self, user: str, key: str | None):
+        with self.lock:
+            if user:
+                self.data["lastfm_user"] = user
+            else:
+                self.data.pop("lastfm_user", None)
+            if key is not None:
+                if key:
+                    self.data["lastfm_key"] = key
+                else:
+                    self.data.pop("lastfm_key", None)
+            if self.path:
+                tmp = self.path.with_suffix(".tmp")
+                tmp.write_text(json.dumps(self.data))
+                tmp.chmod(0o600)
+                tmp.replace(self.path)
 
 
 class Hub:
@@ -148,6 +194,7 @@ def qr_svg(text: str) -> bytes:
 class Handler(BaseHTTPRequestHandler):
     server_version = f"ufoscene-pi/{VERSION}"
     hub: Hub
+    settings: "Settings"
     www: Path
     ufo: Path
 
@@ -218,7 +265,11 @@ class Handler(BaseHTTPRequestHandler):
                 return
             return self.send_file(self.ufo, p[len("/ufo/"):])
         if p == "/api/state":
-            return self.send_json({**self.hub.snapshot(), "urls": remote_urls()})
+            lf = self.settings.lastfm()
+            lastfm = {"user": lf["user"], "key": bool(lf["key"]), "built_in_key": bool(self.settings.built_in_key)}
+            return self.send_json({**self.hub.snapshot(), "urls": remote_urls(), "lastfm": lastfm})
+        if p == "/api/lastfm" and self.from_this_pi():  # with the key: for the TV page only
+            return self.send_json(self.settings.lastfm())
         if p == "/api/qr.svg":
             text = parse_qs(url.query).get("text", [remote_urls()["mdns"]])[0][:200]
             return self.send_bytes(qr_svg(text), "image/svg+xml")
@@ -240,6 +291,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "unknown audio source"}, HTTPStatus.BAD_REQUEST)
             if cmd == "demo" and not (isinstance(arg, int) and 1 <= arg <= 999):
                 return self.send_json({"error": "demo is a number"}, HTTPStatus.BAD_REQUEST)
+            if cmd == "lastfm":
+                if not isinstance(arg, dict):
+                    return self.send_json({"error": "lastfm needs a user"}, HTTPStatus.BAD_REQUEST)
+                user = str(arg.get("user") or "").strip()
+                key = arg.get("key")
+                key = None if key is None else str(key).strip().lower()
+                if user and not LASTFM_USER.fullmatch(user):
+                    return self.send_json({"error": "that is not a Last.fm username"}, HTTPStatus.BAD_REQUEST)
+                if key and not LASTFM_KEY.fullmatch(key):
+                    return self.send_json({"error": "a Last.fm API key is 32 letters and digits"}, HTTPStatus.BAD_REQUEST)
+                self.settings.set_lastfm(user, key)
+                arg = None  # the TV page fetches it from /api/lastfm: the key stays off the network
             if cmd == "audio":
                 set_default_input(arg)
             self.hub.publish({"cmd": cmd, "arg": arg})
@@ -308,8 +371,16 @@ def main():
     ap.add_argument("--port", type=int, default=int(os.environ.get("UFO_PORT", "80")))
     ap.add_argument("--www", default=os.environ.get("UFO_WWW", "/opt/ufoscene/www"))
     ap.add_argument("--ufo", default=os.environ.get("UFO_WEB", "/opt/ufoscene/ufo"))
+    ap.add_argument("--state", default=os.environ.get("STATE_DIRECTORY", "/var/lib/ufoscene"))
+    ap.add_argument("--lastfm-key-file", default="/etc/ufoscene/lastfm-api-key")
     a = ap.parse_args()
 
+    try:
+        built_in = Path(a.lastfm_key_file).read_text().strip()
+    except OSError:
+        built_in = ""
+    Path(a.state).mkdir(parents=True, exist_ok=True)
+    Handler.settings = Settings(Path(a.state) / "settings.json", built_in)
     Handler.hub = Hub()
     Handler.www = Path(a.www)
     Handler.ufo = Path(a.ufo)

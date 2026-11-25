@@ -46,3 +46,9 @@ footer a { color: #8af; }
 .hint p { margin: 4px 0; }
 [hidden] { display: none !important; }
 button:disabled { opacity: .6; }
+
+.stack { display: grid; gap: 6px; }
+.stack label { color: #aaa; font-size: .9rem; margin-top: 4px; }
+.stack input { width: 100%; box-sizing: border-box; }
+.stack .row { grid-template-columns: repeat(2, 1fr); }
+.hint a { color: var(--c3); }

@@ -94,7 +94,15 @@ The first start on a Pi 2 takes a minute or two before the demo and the music be
 
 The music plays through the TV at full level (use the TV's remote for the volume; the phone's
 volume buttons don't change it); ufoscene switches to it, starts a new demo per song and shows the
-artist and title. Spotify Free works too. (Up to 0.1 the Pi was a Spotify Connect speaker, but
+artist and title. Spotify Free works too.
+
+**Song names from anywhere (Last.fm)**: Spotify on a Mac or PC, and a phone that sends no track
+info, give the Pi only the sound. Link Spotify to Last.fm
+([last.fm/settings/applications](https://www.last.fm/settings/applications)), then type your
+Last.fm username under **Song names** on the remote: ufoscene shows what you play, from any
+device, within about 10 seconds. Images built with the repository variable `LASTFM_API_KEY` have
+an API key built in; otherwise paste your own
+([last.fm/api/account/create](https://www.last.fm/api/account/create), free). (Up to 0.1 the Pi was a Spotify Connect speaker, but
 Spotify no longer lets [librespot](https://github.com/librespot-org/librespot/issues/1649) play.)
 
 ## How it works

@@ -113,6 +113,8 @@ rm -rf "$PREFIX.old"
 mkdir -p /etc/ufoscene
 sed "s/@KUID@/$KUID/g" "$PREFIX/shairport-sync.conf" > /etc/ufoscene/shairport-sync.conf
 sed "s/@USER@/$KIOSK_USER/g" "$PREFIX/dbus/ufoscene-bluetooth.conf" > /etc/dbus-1/system.d/ufoscene-bluetooth.conf
+# a Last.fm API key built into the bundle, for song names (the remote can set its own)
+if [[ -f "$PREFIX/lastfm-api-key" ]]; then install -m 644 "$PREFIX/lastfm-api-key" /etc/ufoscene/lastfm-api-key; fi
 if [[ -f /etc/bluetooth/main.conf ]]; then
   # major class audio/video, minor loudspeaker
   sed -i -E 's/^#? *Class *=.*/Class = 0x000414/' /etc/bluetooth/main.conf

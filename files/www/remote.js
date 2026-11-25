@@ -23,6 +23,15 @@ for (const b of document.querySelectorAll('[data-audio]')) {
   b.addEventListener('click', () => send('audio', b.dataset.audio));
 }
 $('pair').addEventListener('click', () => send('pair'));
+$('lastfm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const user = $('lfm-user').value.trim();
+  const key = $('lfm-key').value.trim();
+  if (!user) return;
+  send('lastfm', key ? { user, key } : { user });
+  $('lfm-key').value = '';
+});
+$('lfm-off').addEventListener('click', () => send('lastfm', { user: '' }));
 $('jump').addEventListener('submit', (e) => {
   e.preventDefault();
   const n = Number($('demo-no').value);
@@ -50,6 +59,11 @@ async function refresh() {
     $('bt-none').hidden = !bt || bt.available;
     $('pair').textContent = bt?.pairing ? 'Pairing… pick UFOSCENE on your phone' : bt?.device ? `Bluetooth: ${bt.device} · Pair another` : 'Pair Bluetooth';
     $('pair').disabled = !!bt?.pairing;
+    const lf = s.lastfm || {};
+    $('lfm-state').textContent = lf.user && lf.key ? `From Last.fm: ${lf.user} ✓` : lf.user ? 'Last.fm needs an API key.' : '';
+    $('lfm-key-row').hidden = !!lf.built_in_key;
+    $('lfm-off').hidden = !lf.user;
+    if (document.activeElement !== $('lfm-user') && lf.user) $('lfm-user').value = lf.user;
     const np = s.nowplaying;
     const via = np?.source === 'airplay' ? 'AirPlay' : 'Bluetooth';
     $('nowplaying').textContent = np && (np.artist || np.title) ? `♪ ${np.artist} — ${np.title} · ${via}${np.playing ? '' : ' (paused)'}` : '';

@@ -75,6 +75,7 @@ class ServerTest(unittest.TestCase):
 
     def setUp(self):
         server.Handler.hub = server.Hub()
+        server.Handler.settings = server.Settings(Path(self.tmp.name) / "settings.json")
 
     def test_pages(self):
         for path, ctype in [
@@ -143,6 +144,30 @@ class ServerTest(unittest.TestCase):
         s = json.loads(request("GET", "/api/state")[2])
         self.assertEqual(s["bluetooth"], {"available": True, "pairing": True, "device": "Pixel 9"})
         self.assertEqual(q.get_nowait(), {"cmd": "bluetooth", "arg": s["bluetooth"]})
+
+    def test_lastfm_username_and_key(self):
+        q = server.Handler.hub.subscribe()
+        key = "0123456789abcdef0123456789abcdef"
+        self.assertEqual(request("POST", "/api/cmd", {"cmd": "lastfm", "arg": {"user": "ufo_fan", "key": key}})[0], 200)
+        self.assertEqual(q.get_nowait(), {"cmd": "lastfm", "arg": None})  # the key is not broadcast
+        s = json.loads(request("GET", "/api/state")[2])
+        self.assertEqual(s["lastfm"], {"user": "ufo_fan", "key": True, "built_in_key": False})
+        self.assertNotIn(key, request("GET", "/api/state")[2].decode())
+        self.assertEqual(request("GET", "/api/lastfm")[0], 404)  # not from the network
+        self.assertEqual(json.loads(request("GET", "/api/lastfm", client="127.0.0.1")[2]), {"user": "ufo_fan", "key": key})
+        # it survives a restart, and an empty username switches it off (the key stays)
+        again = server.Settings(Path(self.tmp.name) / "settings.json")
+        self.assertEqual(again.lastfm(), {"user": "ufo_fan", "key": key})
+        request("POST", "/api/cmd", {"cmd": "lastfm", "arg": {"user": ""}})
+        self.assertEqual(server.Handler.settings.lastfm(), {"user": "", "key": key})
+
+    def test_lastfm_built_in_key_and_bad_input(self):
+        server.Handler.settings = server.Settings(None, "f" * 32)
+        request("POST", "/api/cmd", {"cmd": "lastfm", "arg": {"user": "someone"}})
+        self.assertEqual(server.Handler.settings.lastfm(), {"user": "someone", "key": "f" * 32})
+        for arg in [None, "someone", {"user": "1abc"}, {"user": "a b"}, {"user": "x" * 16},
+                    {"user": "ok_user", "key": "not-a-key"}]:
+            self.assertEqual(request("POST", "/api/cmd", {"cmd": "lastfm", "arg": arg})[0], 400, arg)
 
     def test_qr(self):
         status, headers, body = request("GET", "/api/qr.svg?text=http://ufoscene.local/")
