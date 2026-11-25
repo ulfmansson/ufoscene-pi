@@ -18,6 +18,8 @@ UtmpIdentifier=tty1
 UtmpMode=user
 Environment=XDG_RUNTIME_DIR=/run/user/@KUID@
 WorkingDirectory=/home/@USER@
+# the demos take whatever CPU is left; music (PipeWire, AirPlay, Bluetooth) comes first
+Nice=5
 ExecStart=/usr/bin/cage -d -s -- @PREFIX@/kiosk.sh
 Restart=always
 RestartSec=3

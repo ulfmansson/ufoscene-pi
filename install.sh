@@ -61,7 +61,7 @@ CHROMIUM=chromium
 apt-cache show chromium >/dev/null 2>&1 || CHROMIUM=chromium-browser
 apt-get install -y -qq --no-install-recommends \
   cage "$CHROMIUM" \
-  pipewire pipewire-pulse wireplumber pulseaudio-utils libspa-0.2-bluetooth \
+  pipewire pipewire-pulse wireplumber pulseaudio-utils libspa-0.2-bluetooth rtkit \
   bluez python3-dbus python3-gi shairport-sync \
   python3 python3-qrcode avahi-daemon libnss-mdns \
   fonts-dejavu-core curl ca-certificates
@@ -119,9 +119,9 @@ if [[ -f /etc/bluetooth/main.conf ]]; then
   grep -q '^Class = 0x000414' /etc/bluetooth/main.conf || sed -i '/^\[General\]/a Class = 0x000414' /etc/bluetooth/main.conf
 fi
 
-# sound through HDMI (the TV) before the headphone jack
+# sound through HDMI (the TV) before the headphone jack, at full volume
 mkdir -p /etc/wireplumber/wireplumber.conf.d
-cp "$PREFIX/wireplumber/51-ufoscene-hdmi.conf" /etc/wireplumber/wireplumber.conf.d/
+cp "$PREFIX"/wireplumber/*.conf /etc/wireplumber/wireplumber.conf.d/
 
 for unit in "$PREFIX"/systemd/*.service; do
   sed -e "s/@KUID@/$KUID/g" -e "s/@USER@/$KIOSK_USER/g" -e "s#@PREFIX@#$PREFIX#g" "$unit" \

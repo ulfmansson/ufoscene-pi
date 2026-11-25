@@ -6,6 +6,8 @@ Wants=network-online.target avahi-daemon.service
 [Service]
 User=@USER@
 Environment=XDG_RUNTIME_DIR=/run/user/@KUID@
+# the sound before the demos: on a Pi 2 Chromium takes every core
+Nice=-10
 ExecStart=/usr/bin/shairport-sync -c /etc/ufoscene/shairport-sync.conf
 Restart=always
 RestartSec=5
