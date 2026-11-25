@@ -73,6 +73,47 @@ async function refresh() {
   }
 }
 
+// ufoscene's playlists (the bundle's ufo/playlists/index.json), as links into the Spotify app
+const GROUPS = { decade: 'Decades', genre: 'Genres', artist: 'Artists', computer: 'Computer music' };
+async function showPlaylists() {
+  const box = $('playlists');
+  let list = [];
+  try {
+    list = await (await fetch('/ufo/playlists/index.json')).json();
+  } catch {}
+  const spotify = (p) => typeof p.spotify === 'string' && p.spotify.startsWith('https://open.spotify.com/');
+  for (const [group, heading] of Object.entries(GROUPS)) {
+    const items = list.filter((p) => p.group === group && spotify(p));
+    if (!items.length) continue;
+    const h = document.createElement('h3');
+    h.textContent = heading;
+    const grid = document.createElement('div');
+    grid.className = 'grid';
+    for (const p of items) {
+      const a = document.createElement('a');
+      a.className = 'button';
+      a.href = p.spotify;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.textContent = p.title;
+      // the music will come from this phone: switch the Pi to it now (the page may go to Spotify)
+      a.addEventListener('click', () => {
+        fetch('/api/cmd', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cmd: 'audio', arg: 'phone' }),
+          keepalive: true,
+        }).catch(() => {});
+        $('phone-hint').hidden = false;
+      });
+      grid.append(a);
+    }
+    box.append(h, grid);
+  }
+  if (!box.childElementCount) box.textContent = 'No playlists in this version.';
+}
+
+showPlaylists();
 refresh();
 setInterval(refresh, 4000);
 document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && refresh());
