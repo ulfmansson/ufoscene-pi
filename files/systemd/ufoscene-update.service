@@ -1,0 +1,13 @@
+[Unit]
+Description=ufoscene-pi: install a newer full release, or go back if it does not start
+After=network-online.target ufoscene-server.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# root: it runs the release's installer (packages, services) like a manual update would
+ExecStart=/usr/bin/python3 @PREFIX@/update.py
+# /var/lib/ufoscene-update: status.json for the remote, and the previous version for going back
+StateDirectory=ufoscene-update
+StateDirectoryMode=0755
+TimeoutStartSec=2h

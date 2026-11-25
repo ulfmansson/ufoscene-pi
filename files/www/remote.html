@@ -12,6 +12,7 @@
 <header>
   <h1>UFOSCENE</h1>
   <p id="status" class="status">connecting…</p>
+  <a class="help" href="/diag">🛠 Pi info &amp; troubleshooting</a>
 </header>
 
 <main>
@@ -27,7 +28,7 @@
     <button data-cmd="song-next">Song ⏭</button>
   </section>
 
-  <form id="jump" class="row">
+  <form id="jump" class="row" novalidate>
     <label for="demo-no">Demo #</label>
     <input id="demo-no" type="number" inputmode="numeric" min="1" max="100" placeholder="1–100">
     <button type="submit">Go</button>
@@ -143,10 +144,16 @@
     <button data-cmd="reload">Reload</button>
   </section>
   <p class="hint" id="fps"></p>
+
+  <h2>Help</h2>
+  <section class="row one">
+    <a class="button" href="/diag">🛠 Pi info &amp; troubleshooting</a>
+  </section>
+  <p class="hint">What the Pi sees (Wi-Fi, AirPlay, sound, TV, temperature), and step-by-step help when something doesn't work.</p>
 </main>
 
 <footer>
-  <a href="https://ufoscene.net/">ufoscene.net</a> · ufoscene-pi <span id="version"></span>
+  <a href="https://ufoscene.net/">ufoscene.net</a> · ufoscene-pi <span id="version"></span><br><span id="update"></span>
 </footer>
 </body>
 </html>

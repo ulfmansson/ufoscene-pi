@@ -78,6 +78,7 @@ class ServerTest(unittest.TestCase):
         self.clock = [1000.0]
         server.Handler.wifi = server.Wifi(clock=lambda: self.clock[0])
         server.Handler.settings = server.Settings(Path(self.tmp.name) / "settings.json")
+        server.Handler.diagnostics = server.diag.Diagnostics({"pi": lambda: {"model": "Raspberry Pi 5"}})
 
     def test_pages(self):
         for path, ctype in [
@@ -85,6 +86,9 @@ class ServerTest(unittest.TestCase):
             ("/tv", "text/html"),
             ("/static/tv.js", "text/javascript"),
             ("/static/remote.css", "text/css"),
+            ("/diag", "text/html"),
+            ("/static/diag.js", "text/javascript"),
+            ("/static/diag.css", "text/css"),
             ("/ufo/", "text/html"),
             ("/ufo/ufo.wasm", "application/wasm"),
             ("/healthz", "text/plain"),
@@ -179,6 +183,33 @@ class ServerTest(unittest.TestCase):
             self.assertEqual(request("POST", "/api/cmd", {"cmd": "spotify-app", "arg": arg})[0], 400, arg)
         request("POST", "/api/cmd", {"cmd": "spotify-app", "arg": {"client_id": ""}})
         self.assertEqual(json.loads(request("GET", "/api/state")[2])["spotify"], {"client_id": ""})
+
+    def test_diagnostics(self):
+        key = "0123456789abcdef0123456789abcdef"
+        request("POST", "/api/cmd", {"cmd": "lastfm", "arg": {"user": "ufo_fan", "key": key}})
+        request("POST", "/api/state", {"fps": 28.5, "demo": 7}, client="127.0.0.1")
+        status, headers, body = request("GET", "/api/diag", client="::ffff:192.168.1.20")
+        self.assertEqual(status, 200)
+        self.assertTrue(headers["Content-Type"].startswith("application/json"))
+        d = json.loads(body)
+        self.assertEqual(d["pi"], {"model": "Raspberry Pi 5"})
+        self.assertEqual((d["tv"]["fps"], d["tv"]["demo"]), (28.5, 7))
+        self.assertEqual(d["network"]["you"], {"ip": "192.168.1.20", "host": "ufoscene.local"})
+        self.assertEqual(d["lastfm"], {"user": "ufo_fan", "key": True})
+        self.assertNotIn(key.encode(), body)
+
+    def test_nightly_update_status(self):
+        self.assertIsNone(json.loads(request("GET", "/api/state")[2])["update"])
+        status = Path(self.tmp.name) / "update-status.json"
+        status.write_text(json.dumps({"result": "failed", "message": "v0.2.1 did not start", "running": "v0.2.0",
+                                      "latest": "v0.2.1", "checked": 1, "bad": ["v0.2.1"]}))
+        server.Handler.update_status = status
+        try:
+            up = json.loads(request("GET", "/api/state")[2])["update"]
+        finally:
+            server.Handler.update_status = None
+        self.assertEqual((up["result"], up["running"], up["latest"]), ("failed", "v0.2.0", "v0.2.1"))
+        self.assertNotIn("bad", up)
 
     def test_qr(self):
         status, headers, body = request("GET", "/api/qr.svg?text=http://ufoscene.local/")

@@ -24,6 +24,9 @@ cp -r "$HERE/files" "$S/files"
 cp -r "$UFO/web" "$S/ufo"
 cp "$WASM" "$S/ufo/ufo.wasm"
 cp "$UFO/LICENSE" "$S/ufo/LICENSE"
+# the installer travels with its files: the nightly update installs with the new release's own,
+# and can go back with the previous one
+cp "$HERE/install.sh" "$S/install.sh"
 UFO_REV=$(git -C "$UFO" rev-parse --short HEAD 2>/dev/null || echo unknown)
 echo "ufoscene-pi $VERSION (ufoscene $UFO_REV)" > "$S/VERSION"
 sed -i.bak "s/^VERSION = .*/VERSION = \"$VERSION\"/" "$S/files/server.py" && rm "$S/files/server.py.bak"

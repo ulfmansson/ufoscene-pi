@@ -6,6 +6,9 @@
 # On a Pi that already runs Raspberry Pi OS Lite:
 #   curl -fsSL https://raw.githubusercontent.com/ulfmansson/ufoscene-pi/main/install.sh | sudo bash
 #
+# Every night it installs a newer full release by itself, and goes back if that one does not
+# start (files/update.py). Off with: echo off | sudo tee /etc/ufoscene/auto-update
+#
 # The remote can change the Pi's Wi-Fi, and with no Wi-Fi it opens a setup network (NetworkManager).
 #
 # The image build runs the same script inside the image (--image).
@@ -28,7 +31,7 @@ while [[ $# -gt 0 ]]; do
     --image) IMAGE=1 ;;
     --bundle) BUNDLE="$2"; shift ;;
     --bundle-url) BUNDLE_URL="$2"; shift ;;
-    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
   shift
@@ -107,7 +110,8 @@ mkdir -p "$PREFIX.new"
 cp -r "$WORK/files/." "$PREFIX.new/"
 cp -r "$WORK/ufo" "$PREFIX.new/ufo"
 [[ -f "$WORK/VERSION" ]] && cp "$WORK/VERSION" "$PREFIX.new/VERSION"
-chmod 755 "$PREFIX.new/server.py" "$PREFIX.new/kiosk.sh" "$PREFIX.new/phone.py" "$PREFIX.new/wifi.py"
+[[ -f "$WORK/install.sh" ]] && install -m 755 "$WORK/install.sh" "$PREFIX.new/install.sh"
+chmod 755 "$PREFIX.new/server.py" "$PREFIX.new/kiosk.sh" "$PREFIX.new/phone.py" "$PREFIX.new/wifi.py" "$PREFIX.new/update.py"
 rm -rf "$PREFIX.old"
 [[ -d "$PREFIX" ]] && mv "$PREFIX" "$PREFIX.old"
 mv "$PREFIX.new" "$PREFIX"
@@ -135,7 +139,7 @@ fi
 mkdir -p /etc/wireplumber/wireplumber.conf.d
 cp "$PREFIX"/wireplumber/*.conf /etc/wireplumber/wireplumber.conf.d/
 
-for unit in "$PREFIX"/systemd/*.service; do
+for unit in "$PREFIX"/systemd/*.service "$PREFIX"/systemd/*.timer; do
   sed -e "s/@KUID@/$KUID/g" -e "s/@USER@/$KIOSK_USER/g" -e "s#@PREFIX@#$PREFIX#g" "$unit" \
     > "/etc/systemd/system/$(basename "$unit")"
 done
@@ -145,6 +149,7 @@ say "Booting straight into ufoscene"
 systemctl disable getty@tty1.service >/dev/null 2>&1 || true
 systemctl enable ufoscene-server.service ufoscene-kiosk.service avahi-daemon.service \
   bluetooth.service ufoscene-phone.service ufoscene-airplay.service ufoscene-wifi.service
+systemctl enable ufoscene-update.timer
 systemctl set-default multi-user.target >/dev/null
 
 # quiet boot: no rainbow square, no console text before the demos
@@ -166,5 +171,6 @@ else
   systemctl restart ufoscene-server.service
   systemctl restart ufoscene-phone.service ufoscene-airplay.service ufoscene-wifi.service
   systemctl restart ufoscene-kiosk.service
+  systemctl start ufoscene-update.timer
   say "Done. ufoscene is starting on the TV; the remote is at http://$(hostname).local/"
 fi
