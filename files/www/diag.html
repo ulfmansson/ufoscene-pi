@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000022">
+<title>ufoscene · Pi info and troubleshooting</title>
+<link rel="stylesheet" href="/static/remote.css">
+<link rel="stylesheet" href="/static/diag.css">
+<script type="module" src="/static/diag.js"></script>
+</head>
+<body>
+<header>
+  <h1>UFOSCENE</h1>
+  <p class="status" id="status">reading the Pi…</p>
+</header>
+
+<main>
+  <nav class="topnav">
+    <a href="/" class="back">← Remote</a>
+  </nav>
+  <section class="seg tabs" role="tablist" aria-label="Pages">
+    <a href="#info" role="tab" id="tab-info">Pi info</a>
+    <a href="#fix" role="tab" id="tab-fix">Fix a problem</a>
+  </section>
+
+  <!-- ---------------------------------------------------------- Pi info -->
+  <div id="page-info" role="tabpanel" aria-labelledby="tab-info">
+    <div id="summary" class="summary"></div>
+    <div id="groups"></div>
+    <h2>Share with someone who helps</h2>
+    <p class="hint">A text copy of everything above. It has no passwords or keys.</p>
+    <section class="row two">
+      <button id="copy">Copy report</button>
+      <button id="show-report">Show as text</button>
+    </section>
+    <textarea id="report" readonly hidden rows="12"></textarea>
+    <p class="hint" id="copied"></p>
+  </div>
+
+  <!-- ---------------------------------------------------------- guide -->
+  <div id="page-fix" role="tabpanel" aria-labelledby="tab-fix" hidden>
+    <div id="fix-list">
+      <p class="hint">What is wrong? Pick the closest one. Each guide goes one step at a time, and
+        shows what the Pi itself sees along the way.</p>
+      <div id="problems"></div>
+    </div>
+
+    <div id="fix-step" hidden>
+      <p class="crumb"><a href="#fix">All problems</a> · <span id="step-problem"></span></p>
+      <p class="progress" id="step-count"></p>
+      <h2 id="step-title"></h2>
+      <div class="step-body" id="step-body"></div>
+      <div class="checks" id="step-checks"></div>
+      <div class="actions" id="step-actions"></div>
+      <section class="row two answer">
+        <button id="step-fixed" class="good">✓ That fixed it</button>
+        <button id="step-next">Still not working →</button>
+      </section>
+      <p class="hint"><a href="#" id="step-back">← Previous step</a></p>
+    </div>
+
+    <div id="fix-done" hidden>
+      <h2>Great 🎉</h2>
+      <p>Enjoy the demos. If it happens again, this guide is under <b>Troubleshoot</b> on the remote.</p>
+      <section class="row two">
+        <a class="button" href="/">Back to the remote</a>
+        <a class="button" href="#fix">Another problem</a>
+      </section>
+    </div>
+
+    <div id="fix-stuck" hidden>
+      <h2>Still stuck</h2>
+      <p class="hint">You went through every step. These usually find the rest:</p>
+      <ol class="hint stuck">
+        <li><b>Restart the Pi:</b> pull its power for ten seconds and put it back, with the TV already
+          on. It takes a minute or two to come back.</li>
+        <li><b>Ask for help:</b> copy the report (it has no passwords) and
+          <a href="https://github.com/ulfmansson/ufoscene-pi/issues/new" target="_blank" rel="noopener">open an issue</a>
+          with it, and say what you tried.</li>
+        <li><b>With SSH</b> (the username and password you set in Raspberry Pi Imager), the logs since the last start:
+          <pre id="ssh-logs"></pre>
+          and where the sound goes:
+          <pre id="ssh-sound"></pre>
+        </li>
+      </ol>
+      <section class="row two">
+        <button id="stuck-copy">Copy report</button>
+        <a class="button" href="#fix">Another problem</a>
+      </section>
+      <p class="hint" id="stuck-copied"></p>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <a href="https://ufoscene.net/">ufoscene.net</a> · ufoscene-pi <span id="version"></span>
+</footer>
+</body>
+</html>

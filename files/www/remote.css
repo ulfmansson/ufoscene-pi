@@ -68,3 +68,11 @@ details summary { cursor: pointer; color: var(--c3); margin: 6px 2px; }
 code { font-size: .8rem; color: var(--c3); word-break: break-all; }
 ol.hint { padding-left: 22px; }
 #wifi-form > .row:last-child { grid-template-columns: 1fr; }
+
+a.help {
+  display: inline-block; margin-top: 8px; padding: 4px 12px; border: 1px solid #446; border-radius: 999px;
+  color: var(--c3); font-size: .8rem; text-decoration: none;
+}
+a.help:active { background: var(--c3); color: #000; }
+.row.one { grid-template-columns: 1fr; }
+.row.one a.button { border-color: var(--c1); min-height: 52px; }

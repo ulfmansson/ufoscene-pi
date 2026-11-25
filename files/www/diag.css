@@ -1,0 +1,69 @@
+/* The troubleshooting page (/diag), on top of remote.css. */
+:root { --ok: #6f6; --warn: #fc3; --bad: #f66; --info: #8af; }
+
+.topnav { margin: 6px 0 0; }
+.topnav a, .crumb a, #step-back { color: var(--c3); }
+.tabs { margin-top: 12px; }
+.tabs a {
+  display: flex; align-items: center; justify-content: center; min-height: 48px; border-radius: 10px;
+  border: 2px solid var(--c1); background: #113; color: #fff; text-decoration: none;
+}
+.tabs a[aria-selected="true"] { background: var(--c3); color: #000; border-color: var(--c3); font-weight: 700; }
+.tabs { grid-template-columns: repeat(2, 1fr); }
+.row.two { grid-template-columns: repeat(2, 1fr); }
+
+.summary { margin: 16px 0 4px; padding: 12px 14px; border-radius: 12px; border: 2px solid #335; background: #001; }
+.summary.ok { border-color: var(--ok); }
+.summary.warn { border-color: var(--warn); }
+.summary.bad { border-color: var(--bad); }
+.summary p { margin: 0 0 6px; }
+.summary ul { margin: 0; padding-left: 0; list-style: none; }
+.summary li { margin: 8px 0; display: grid; grid-template-columns: auto 1fr; align-items: baseline; }
+.summary a { color: var(--c3); white-space: nowrap; }
+
+.group { margin-top: 18px; }
+.group table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+.group th { text-align: left; font-weight: 500; color: #aaa; padding: 7px 8px 7px 0; width: 42%; vertical-align: top; }
+.group td { padding: 7px 0; word-break: break-word; }
+.group tr + tr th, .group tr + tr td { border-top: 1px solid #224; }
+
+.dot { display: inline-block; width: .7em; height: .7em; border-radius: 50%; margin-right: 6px; background: #556; flex: none; }
+.dot.ok { background: var(--ok); }
+.dot.warn { background: var(--warn); }
+.dot.bad { background: var(--bad); }
+.dot.info { background: var(--info); }
+td.bad { color: var(--bad); }
+td.warn { color: var(--warn); }
+
+#problems h3 { font-size: .85rem; color: #aaa; margin: 18px 2px 6px; font-weight: 600; }
+#problems .list { display: grid; gap: 8px; }
+#problems a.button { justify-content: flex-start; text-align: left; border-color: var(--c1); padding: 10px 14px; }
+#problems a.button .flag { margin-left: auto; padding-left: 8px; color: var(--warn); font-size: .85rem; }
+
+.crumb { color: #aaa; font-size: .85rem; margin: 14px 0 0; }
+.progress { color: #aaa; font-size: .8rem; margin: 6px 0 0; letter-spacing: .1rem; }
+#fix-step h2 { text-transform: none; letter-spacing: 0; font-size: 1.15rem; color: #fff; margin: 6px 0 8px; }
+.step-body { line-height: 1.5; }
+.step-body p { margin: 8px 0; }
+.step-body ul, .step-body ol { padding-left: 22px; margin: 6px 0; }
+.step-body li { margin: 4px 0; }
+.step-body b { color: var(--c3); }
+.checks { margin: 12px 0; border-radius: 12px; background: #001; border: 1px solid #224; }
+.checks:empty { display: none; }
+.checks .line { display: flex; align-items: baseline; gap: 4px; padding: 9px 12px; font-size: .92rem; }
+.checks .line + .line { border-top: 1px solid #224; }
+.checks .label { color: #aaa; margin-right: 6px; }
+.actions { display: grid; gap: 8px; margin: 12px 0; }
+.actions:empty { display: none; }
+.actions button, .actions a.button { border-color: var(--c2); }
+.answer { margin-top: 18px; }
+button.good { border-color: var(--ok); }
+.stuck li { margin: 10px 0; }
+pre {
+  white-space: pre-wrap; word-break: break-all; background: #001; border: 1px solid #224; border-radius: 8px;
+  padding: 8px; font-size: .75rem; color: var(--c3); margin: 6px 0;
+}
+textarea {
+  width: 100%; margin-top: 10px; font: .75rem/1.4 ui-monospace, monospace; color: #ddd; background: #001;
+  border: 2px solid #446; border-radius: 10px; padding: 8px;
+}

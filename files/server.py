@@ -8,6 +8,7 @@
   AirPlay (/api/nowplaying, /api/bluetooth; phone.py sends those)
 * takes a new Wi-Fi network from the remote, confirmed with a code shown on the TV, and hands it
   to wifi.py, which runs as root and does the change (/api/wifi*)
+* shows what the Pi knows about itself for troubleshooting (/diag, /api/diag; diag.py)
 
 Standard library only, plus python3-qrcode for the QR code on the TV.
 """
@@ -29,6 +30,8 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+
+import diag
 
 VERSION = "0.2.0"
 
@@ -336,6 +339,7 @@ class Handler(BaseHTTPRequestHandler):
     hub: Hub
     settings: "Settings"
     wifi: Wifi
+    diagnostics: diag.Diagnostics
     www: Path
     ufo: Path
 
@@ -414,6 +418,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_file(self.www, "remote.html")
         if p == "/tv":
             return self.send_file(self.www, "tv.html")
+        if p in ("/diag", "/troubleshoot"):
+            return self.send_file(self.www, "diag.html")
         if p.startswith("/static/"):
             return self.send_file(self.www, p[len("/static/"):])
         if p == "/ufo" or p.startswith("/ufo/"):
@@ -430,6 +436,11 @@ class Handler(BaseHTTPRequestHandler):
             spotify = {"client_id": self.settings.spotify_client_id()}
             return self.send_json({**self.hub.snapshot(), "urls": remote_urls(), "lastfm": lastfm, "spotify": spotify,
                                    "wifi": self.wifi.public()})
+        if p == "/api/diag":
+            host = (self.headers.get("Host") or "")[:100]
+            return self.send_json(self.diagnostics.report(
+                self.hub.snapshot(), self.wifi.public(), self.settings.lastfm(), remote_urls(),
+                client=self.client_address[0].removeprefix("::ffff:"), host=host, version=VERSION))
         if p == "/api/lastfm" and self.from_this_pi():  # with the key: for the TV page only
             return self.send_json(self.settings.lastfm())
         # for the TV page and wifi.py on the Pi itself
@@ -580,6 +591,7 @@ def main():
     Handler.settings = Settings(Path(a.state) / "settings.json", built_in)
     Handler.hub = Hub()
     Handler.wifi = Wifi()
+    Handler.diagnostics = diag.Diagnostics()
     Handler.www = Path(a.www)
     Handler.ufo = Path(a.ufo)
 
