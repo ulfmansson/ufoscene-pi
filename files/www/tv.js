@@ -7,7 +7,7 @@ const overlay = $('connect');
 const fpsBox = $('fps');
 const toast = $('toast');
 
-const CONNECT_SHOW_MS = 90_000;
+const CONNECT_SHOW_MS = 10_000; // the QR code at boot; the remote's QR code button brings it back
 const MIN_FPS = 25; // the bar a Pi model has to clear to be supported
 
 // First run: skip ufoscene's setup guide, use the radio, and steady 30 fps TV mode.
