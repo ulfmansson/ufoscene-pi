@@ -213,7 +213,9 @@ async function playOnPhone(title, link, e) {
 
 // ------------------------------------------------------------ Spotify control (optional)
 
-let clientId = '';
+// null until the Pi's first state: then even "no Client ID" ('') counts as news, so spShow runs
+// and the setup box appears. Starting at '' left the whole section hidden on a Pi without one.
+let clientId = null;
 function spMsg(text, bad = false) {
   $('sp-msg').textContent = text;
   $('sp-msg').className = `hint ${bad ? 'bad' : ''}`;
