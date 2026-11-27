@@ -113,8 +113,22 @@ setInterval(() => {
     fpsBox.textContent = `${lastFps.toFixed(0)} fps`;
     fpsBox.className = lastFps >= MIN_FPS ? '' : lastFps >= MIN_FPS * 0.8 ? 'slow' : 'bad';
   }
-  report({ fps: lastFps, demo: currentDemo() });
+  report({ fps: lastFps, demo: currentDemo(), show: currentShow() });
 }, 5000);
+
+// The show on the stage ('concert' or 'ukraine'), or null: the one this page last started, for
+// as long as ufoscene says a show still runs. The remote starts a show's music only on a new show.
+let show = null;
+function currentShow() {
+  const u = ufo();
+  try {
+    return show && u?.ex && u.ex.ufo_concert_left(u.demo) > 0 ? show : null;
+  } catch {
+    return null; // a bundle older than the shows
+  }
+}
+// the flag and ukraine.ufoscene.net in a corner for as long as the Ukraine show runs
+setInterval(() => ($('ukraine-help').hidden = currentShow() !== 'ukraine'), 1000);
 
 function currentDemo() {
   const u = ufo();
@@ -142,12 +156,19 @@ const KEYS = {
   tv: 't',
   panel: 'p',
   start: 'Enter',
+  // the shows; pressed again they end. A ufoscene bundle older than the shows ignores the keys.
+  concert: 'c',
+  ukraine: 'u',
 };
 
 function handle({ cmd, arg }) {
   if (KEYS[cmd]) {
     if (cmd === 'song-next' && !running()) key('Enter'); // Space on the panel would only start
-    else key(KEYS[cmd]);
+    else if (cmd === 'concert' || cmd === 'ukraine') {
+      show = currentShow() === cmd ? null : cmd; // the same show again ends it
+      key(KEYS[cmd]);
+      setTimeout(() => report({ show: currentShow() }), 300);
+    } else key(KEYS[cmd]);
     return;
   }
   switch (cmd) {
