@@ -213,3 +213,60 @@ export function playLink(link) {
   return api('PUT', '/me/player/play', { context_uri: uri });
 }
 export const playPlaylist = playLink;
+
+// ---------------------------------------------------------------- the shows' setlists
+
+/** The song lines of a setlist (ufoscene's playlists/*.txt): blank lines and # comments left out. */
+export function setlistSongs(text) {
+  return String(text)
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('#'));
+}
+
+/** spotify:track:… for a line that holds a track link or URI, else ''. */
+export function trackUri(line) {
+  const id = /track[/:]([A-Za-z0-9]{22})/.exec(String(line))?.[1];
+  return id ? `spotify:track:${id}` : '';
+}
+
+/** Spotify searches for an "Artist - Title" line, best first (as ufoscene.net looks them up). */
+export function searchQueries(line) {
+  const parts = String(line).split(/\s+[-–—]\s+/);
+  const [artist, ...title] = parts;
+  return parts.length >= 2 ? [`track:${title.join(' - ')} artist:${artist}`, line] : [line];
+}
+
+/** spotify:track:… for one setlist line, or '' when Spotify has no such song. */
+export async function findTrack(line) {
+  const uri = trackUri(line);
+  if (uri) return uri;
+  for (const q of searchQueries(line)) {
+    const j = await api('GET', `/search?${new URLSearchParams({ q, type: 'track', limit: '1' })}`);
+    const hit = j?.tracks?.items?.[0]?.uri;
+    if (hit) return hit;
+  }
+  return '';
+}
+
+/**
+ * Play these tracks in this order, once (shuffle and repeat off). It plays on the device that
+ * plays now; with none active, on this phone's Spotify app if it is open, else on any other.
+ */
+export async function playInOrder(uris) {
+  let on = '';
+  try {
+    await api('PUT', '/me/player/play', { uris });
+  } catch (e) {
+    if (e.reason !== 'NO_ACTIVE_DEVICE') throw e;
+    const devices = ((await api('GET', '/me/player/devices'))?.devices || []).filter((d) => !d.is_restricted);
+    const d = devices.find((x) => x.type === 'Smartphone') || devices[0];
+    if (!d) throw e;
+    on = `device_id=${encodeURIComponent(d.id)}`;
+    await api('PUT', `/me/player/play?${on}`, { uris });
+  }
+  const and = on ? `&${on}` : '';
+  // not fatal if a device refuses these
+  await api('PUT', `/me/player/shuffle?state=false${and}`).catch(() => {});
+  await api('PUT', `/me/player/repeat?state=off${and}`).catch(() => {});
+}

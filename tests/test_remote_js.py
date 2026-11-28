@@ -64,6 +64,65 @@ print(JSON.stringify([
             "", "", "",
         ])
 
+    def test_setlist_lines_and_searches(self):
+        r = run_module("""
+import { setlistSongs, trackUri, searchQueries } from '@WWW@/spotify.js';
+const text = '# name: ufoscene.net · The concert\\r\\n\\n# Act 1\\nQueen - We Will Rock You\\n  Kalush Orchestra – Stefania  \\n'
+  + 'https://open.spotify.com/track/7ouMYWpwJ422jRcDASZB7P?si=x\\n';
+print(JSON.stringify({
+  songs: setlistSongs(text),
+  uris: setlistSongs(text).map(trackUri),
+  q: [searchQueries('Queen - We Will Rock You'), searchQueries('AC/DC - Back - In Black'), searchQueries('Stefania')],
+}));
+""")
+        self.assertEqual(r["songs"], [
+            "Queen - We Will Rock You",
+            "Kalush Orchestra – Stefania",
+            "https://open.spotify.com/track/7ouMYWpwJ422jRcDASZB7P?si=x",
+        ])
+        self.assertEqual(r["uris"], ["", "", "spotify:track:7ouMYWpwJ422jRcDASZB7P"])
+        self.assertEqual(r["q"], [
+            ["track:We Will Rock You artist:Queen", "Queen - We Will Rock You"],
+            ["track:Back - In Black artist:AC/DC", "AC/DC - Back - In Black"],
+            ["Stefania"],
+        ])
+
+    def test_setlist_plays_in_order_on_the_phone_when_nothing_is_active(self):
+        r = run_module("""
+const kv = { 'ufopi.spotify.access': 't', 'ufopi.spotify.expires': String(Date.now() + 1e6), 'ufopi.spotify.refresh': 'r' };
+globalThis.localStorage = { getItem: (k) => kv[k] ?? null, setItem: (k, v) => (kv[k] = v), removeItem: (k) => delete kv[k] };
+const calls = [];
+let active = false;
+const res = (status, body) => ({ status, ok: status < 300, json: async () => body });
+globalThis.fetch = async (url, opts = {}) => {
+  const u = new URL(url);
+  calls.push(`${opts.method} ${u.pathname}${u.search}`);
+  if (u.pathname.endsWith('/search')) {
+    const q = u.searchParams.get('q');
+    return res(200, { tracks: { items: q === 'track:Under Pressure artist:Queen' ? [{ uri: 'spotify:track:pressure' }] : [] } });
+  }
+  if (u.pathname.endsWith('/devices')) return res(200, { devices: [
+    { id: 'tv', type: 'TV', is_restricted: true }, { id: 'pc', type: 'Computer' }, { id: 'phone 1', type: 'Smartphone' }] });
+  if (u.pathname.endsWith('/play') && !u.searchParams.get('device_id') && !active)
+    return res(404, { error: { reason: 'NO_ACTIVE_DEVICE', message: 'no' } });
+  if (u.pathname.endsWith('/play')) { active = true; calls.push(opts.body); return res(204); }
+  return res(204);
+};
+const sp = await import('@WWW@/spotify.js');
+const found = await Promise.all(['Queen - Under Pressure', 'nobody', 'spotify:track:7ouMYWpwJ422jRcDASZB7P'].map(sp.findTrack));
+await sp.playInOrder(found.filter(Boolean));
+print(JSON.stringify({ found, calls: calls.filter((c) => !c.includes('/search')) }));
+""")
+        self.assertEqual(r["found"], ["spotify:track:pressure", "", "spotify:track:7ouMYWpwJ422jRcDASZB7P"])
+        self.assertEqual(r["calls"], [
+            "PUT /v1/me/player/play",
+            "GET /v1/me/player/devices",
+            "PUT /v1/me/player/play?device_id=phone%201",
+            '{"uris":["spotify:track:pressure","spotify:track:7ouMYWpwJ422jRcDASZB7P"]}',
+            "PUT /v1/me/player/shuffle?state=false&device_id=phone%201",
+            "PUT /v1/me/player/repeat?state=off&device_id=phone%201",
+        ])
+
 
 if __name__ == "__main__":
     unittest.main()

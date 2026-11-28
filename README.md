@@ -114,6 +114,7 @@ The first start on a Pi 2 takes a minute or two before the demo and the music be
 | ◀ ⟳ ▶ | previous, random and next demo |
 | Next part | next part of the current demo |
 | ⏮ Song / Song ⏭ | previous or next radio station |
+| 🎸 Concert · 🇺🇦 Ukraine | ufoscene's 30-minute pixel concert or 10-minute Ukraine at Eurovision show (keys C and U); pressed again it ends. With Spotify control (below) the phone also plays the show's setlist in order. The Ukraine show puts the flag and ukraine.ufoscene.net (with a QR code) in a corner of the TV. Needs a bundle with ufoscene's shows in it |
 | Demo # | jump to a demo (1–100) |
 | Radio · Phone · Mic / line in | where the music comes from |
 | Pair Bluetooth | lets a new phone connect over Bluetooth for two minutes |
@@ -146,7 +147,9 @@ phone and switches the Pi to the phone; press play and pick UFOSCENE.
 **Spotify control (optional, Premium)**: with your own Spotify app (a Client ID from
 [developer.spotify.com](https://developer.spotify.com/dashboard), redirect URI
 `https://pi.ufoscene.net/spotify`), the remote shows what plays, skips songs and starts the
-playlists without leaving the page. The login runs in the phone's browser and the tokens stay on
+playlists without leaving the page. 🎸 Concert and 🇺🇦 Ukraine then start their setlists (the
+Queen concert, Ukraine's three Eurovision winners) in order on the phone, and switch the Pi to the
+phone; send the sound to UFOSCENE as usual. The login runs in the phone's browser and the tokens stay on
 the phone; the Pi only keeps the Client ID. See [`docs/spotify-bounce/`](docs/spotify-bounce/)
 for the redirect page. Off until you set it up. (Up to 0.1 the Pi was a Spotify Connect speaker, but
 Spotify no longer lets [librespot](https://github.com/librespot-org/librespot/issues/1649) play.)

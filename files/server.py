@@ -43,8 +43,10 @@ mimetypes.add_type("image/svg+xml", ".svg")
 COMMANDS = {
     "start", "next", "prev", "random", "scene", "song-next", "song-prev", "hud", "tv",
     "panel", "demo", "audio", "overlay", "selftest", "reload", "pair", "lastfm",
-    "spotify-app",
+    "spotify-app", "concert", "ukraine",
 }
+# ufoscene's two shows on its pixel stage (keys C and U on the TV page)
+SHOWS = {"concert", "ukraine"}
 # phone: whatever a phone plays to the Pi over Bluetooth or AirPlay
 AUDIO_SOURCES = {"radio", "mic", "phone"}
 PHONE_SOURCES = {"bluetooth", "airplay"}
@@ -240,6 +242,7 @@ class Hub:
             "fps": None,
             "audio": "radio",
             "demo": None,
+            "show": None,  # "concert" or "ukraine" while one runs on the TV
             "nowplaying": None,  # {"source", "artist", "title", "playing"}
             "bluetooth": None,  # {"available", "pairing", "device"} from phone.py
             "tv_seen": None,
@@ -530,6 +533,10 @@ class Handler(BaseHTTPRequestHandler):
         if p == "/api/state" and self.from_this_pi():
             body = self.read_json()
             allowed = {k: body[k] for k in ("fps", "audio", "demo") if k in body}
+            # the show on the TV's stage, if any: the remote starts the music only for a new one
+            if "show" in body:
+                show = body["show"]
+                allowed["show"] = show if isinstance(show, str) and show in SHOWS else None
             self.hub.update(tv_seen=time.time(), **allowed)
             return self.send_json({"ok": True})
         if p == "/api/nowplaying" and self.from_this_pi():

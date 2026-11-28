@@ -130,6 +130,20 @@ class ServerTest(unittest.TestCase):
         self.assertNotIn("evil", s)
         self.assertIn("mdns", s["urls"])
 
+    def test_the_tv_reports_which_show_runs(self):
+        pi = "127.0.0.1"
+        show = lambda: json.loads(request("GET", "/api/state")[2])["show"]
+        request("POST", "/api/state", {"show": "ukraine"}, client=pi)
+        self.assertEqual(show(), "ukraine")
+        request("POST", "/api/state", {"fps": 30}, client=pi)  # left out: unchanged
+        self.assertEqual(show(), "ukraine")
+        for junk in ["<script>", ["concert"], {"a": 1}, 7]:
+            request("POST", "/api/state", {"show": "concert"}, client=pi)
+            self.assertEqual(request("POST", "/api/state", {"show": junk}, client=pi)[0], 200)
+            self.assertIsNone(show(), junk)
+        request("POST", "/api/state", {"show": None}, client=pi)
+        self.assertIsNone(show())
+
     def test_nowplaying_keeps_the_track_on_pause(self):
         q = server.Handler.hub.subscribe()
         pi = "127.0.0.1"

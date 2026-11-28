@@ -213,7 +213,9 @@ async function playOnPhone(title, link, e) {
 
 // ------------------------------------------------------------ Spotify control (optional)
 
-let clientId = '';
+// null until the Pi's first state: then even "no Client ID" ('') counts as news, so spShow runs
+// and the setup box appears. Starting at '' left the whole section hidden on a Pi without one.
+let clientId = null;
 function spMsg(text, bad = false) {
   $('sp-msg').textContent = text;
   $('sp-msg').className = `hint ${bad ? 'bad' : ''}`;
@@ -277,6 +279,56 @@ spotify.finishLogin().then((err) => {
   spRefresh();
 });
 setInterval(spRefresh, 5000);
+
+// ------------------------------------------------------------ the shows
+
+// 🎸 Concert and 🇺🇦 Ukraine start a show on the TV's pixel stage; the same button again ends it.
+// Logged in to Spotify control, this phone also starts the show's setlist (ufoscene's
+// playlists/*.txt) in order, as ufoscene.net does with C and U, and the Pi listens to the phone.
+// Every new song brings the next act. Ending a show leaves the music alone.
+const SHOWS = {
+  concert: { setlist: '/ufo/playlists/concert.txt', name: 'The concert' },
+  ukraine: { setlist: '/ufo/playlists/ukraine.txt', name: 'Ukraine at Eurovision' },
+};
+function showMsg(text, bad = false) {
+  $('show-msg').hidden = !text;
+  $('show-msg').textContent = text;
+  $('show-msg').className = `hint ${bad ? 'bad' : ''}`;
+}
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function startShow(show) {
+  let s = {};
+  try {
+    s = await (await fetch('/api/state', { cache: 'no-store' })).json();
+  } catch {}
+  const withMusic = s.show !== show && !!clientId && spotify.connected();
+  if (!withMusic) showMsg('');
+  if (withMusic && s.audio !== 'phone') {
+    await send('audio', 'phone');
+    await wait(1500); // the TV starts ufoscene again for the new source; the show comes after
+  }
+  send(show);
+  if (withMusic) playSetlist(show);
+}
+
+async function playSetlist(show) {
+  const { setlist, name } = SHOWS[show];
+  showMsg(`${name}: finding the songs on Spotify…`);
+  try {
+    const r = await fetch(setlist);
+    if (!r.ok) throw new Error('this ufoscene version has no setlist for it.');
+    const songs = spotify.setlistSongs(await r.text());
+    const uris = (await Promise.all(songs.map((l) => spotify.findTrack(l).catch(() => '')))).filter(Boolean);
+    if (!uris.length) throw new Error('Spotify found none of its songs.');
+    await spotify.playInOrder(uris);
+    showMsg(`${name}: ${uris.length} songs on Spotify, in order. Send the sound to UFOSCENE and enjoy the show!`);
+    setTimeout(spRefresh, 1500);
+  } catch (e) {
+    showMsg(`${name}: ${e.message}`, true);
+  }
+}
+for (const b of document.querySelectorAll('[data-show]')) b.addEventListener('click', () => startShow(b.dataset.show));
 
 showPlaylists();
 refresh();
