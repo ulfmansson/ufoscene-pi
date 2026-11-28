@@ -11,6 +11,9 @@
 #
 # The remote can change the Pi's Wi-Fi, and with no Wi-Fi it opens a setup network (NetworkManager).
 #
+# The TV shows ufoscene in Chromium (the default) or in ufo-native, the player without a browser:
+#   sudo /opt/ufoscene/player.sh native     (or browser; kept in /etc/ufoscene/player)
+#
 # The image build runs the same script inside the image (--image).
 #
 # Options:
@@ -31,7 +34,7 @@ while [[ $# -gt 0 ]]; do
     --image) IMAGE=1 ;;
     --bundle) BUNDLE="$2"; shift ;;
     --bundle-url) BUNDLE_URL="$2"; shift ;;
-    -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
   shift
@@ -69,7 +72,9 @@ apt-get install -y -qq --no-install-recommends \
   pipewire pipewire-pulse wireplumber pulseaudio-utils libspa-0.2-bluetooth rtkit \
   bluez python3-dbus python3-gi shairport-sync \
   python3 python3-qrcode avahi-daemon libnss-mdns iw \
-  fonts-dejavu-core curl ca-certificates
+  fonts-dejavu-core curl ca-certificates \
+  mpv
+# (mpv plays the radio for ufo-native, the player without a browser)
 # the Pi 3 and 4 radio needs Raspberry Pi's Bluetooth helper (already in Raspberry Pi OS)
 if apt-cache show pi-bluetooth >/dev/null 2>&1; then apt-get install -y -qq --no-install-recommends pi-bluetooth; fi
 # the Wi-Fi setup network: NetworkManager shares it with dnsmasq (Raspberry Pi OS since Bookworm)
@@ -111,7 +116,14 @@ cp -r "$WORK/files/." "$PREFIX.new/"
 cp -r "$WORK/ufo" "$PREFIX.new/ufo"
 [[ -f "$WORK/VERSION" ]] && cp "$WORK/VERSION" "$PREFIX.new/VERSION"
 [[ -f "$WORK/install.sh" ]] && install -m 755 "$WORK/install.sh" "$PREFIX.new/install.sh"
-chmod 755 "$PREFIX.new/server.py" "$PREFIX.new/kiosk.sh" "$PREFIX.new/phone.py" "$PREFIX.new/wifi.py" "$PREFIX.new/update.py"
+chmod 755 "$PREFIX.new/server.py" "$PREFIX.new/kiosk.sh" "$PREFIX.new/phone.py" "$PREFIX.new/wifi.py" "$PREFIX.new/update.py" \
+  "$PREFIX.new/player.sh"
+# ufo-native, the player without a browser: this Pi's binary from the bundle (none in older ones)
+if [[ -f "$WORK/native/ufo-native-$ARCH" ]]; then
+  mkdir -p "$PREFIX.new/native"
+  install -m 755 "$WORK/native/ufo-native-$ARCH" "$PREFIX.new/native/ufo-native"
+  install -m 644 "$WORK/native/ufoscene-native.service" "$PREFIX.new/native/ufoscene-native.service"
+fi
 rm -rf "$PREFIX.old"
 [[ -d "$PREFIX" ]] && mv "$PREFIX" "$PREFIX.old"
 mv "$PREFIX.new" "$PREFIX"
@@ -143,11 +155,30 @@ for unit in "$PREFIX"/systemd/*.service "$PREFIX"/systemd/*.timer; do
   sed -e "s/@KUID@/$KUID/g" -e "s/@USER@/$KIOSK_USER/g" -e "s#@PREFIX@#$PREFIX#g" "$unit" \
     > "/etc/systemd/system/$(basename "$unit")"
 done
+if [[ -x "$PREFIX/native/ufo-native" ]]; then
+  sed -e "s/@KUID@/$KUID/g" -e "s/@USER@/$KIOSK_USER/g" -e "s#@BIN@#$PREFIX/native/ufo-native#g" \
+    "$PREFIX/native/ufoscene-native.service" > /etc/systemd/system/ufoscene-native.service
+else
+  systemctl disable ufoscene-native.service >/dev/null 2>&1 || true
+  rm -f /etc/systemd/system/ufoscene-native.service
+fi
+
+# What the TV shows ufoscene with: the browser kiosk, or ufo-native when /etc/ufoscene/player
+# says native and this Pi can run it (not a Pi 1 or Zero: ARMv6, and too slow for either)
+PLAYER=browser
+[[ "$(tr -d '[:space:]' < /etc/ufoscene/player 2>/dev/null || true)" == native ]] && PLAYER=native
+if [[ $PLAYER == native ]] && ! "$PREFIX/player.sh" can-run-native; then
+  say "ufo-native cannot run on this Pi: the TV uses the browser"
+  PLAYER=browser
+fi
+if [[ $PLAYER == native ]]; then PLAYER_UNIT=ufoscene-native.service; OTHER_UNIT=ufoscene-kiosk.service
+else PLAYER_UNIT=ufoscene-kiosk.service; OTHER_UNIT=ufoscene-native.service; fi
 
 # ------------------------------------------------------------------ boot
 say "Booting straight into ufoscene"
 systemctl disable getty@tty1.service >/dev/null 2>&1 || true
-systemctl enable ufoscene-server.service ufoscene-kiosk.service avahi-daemon.service \
+systemctl disable "$OTHER_UNIT" >/dev/null 2>&1 || true
+systemctl enable ufoscene-server.service "$PLAYER_UNIT" avahi-daemon.service \
   bluetooth.service ufoscene-phone.service ufoscene-airplay.service ufoscene-wifi.service
 systemctl enable ufoscene-update.timer
 systemctl set-default multi-user.target >/dev/null
@@ -170,7 +201,8 @@ else
   systemctl restart bluetooth.service >/dev/null 2>&1 || true
   systemctl restart ufoscene-server.service
   systemctl restart ufoscene-phone.service ufoscene-airplay.service ufoscene-wifi.service
-  systemctl restart ufoscene-kiosk.service
+  # starting one player stops the other (the native unit has Conflicts= with the kiosk)
+  systemctl restart "$PLAYER_UNIT"
   systemctl start ufoscene-update.timer
   say "Done. ufoscene is starting on the TV; the remote is at http://$(hostname).local/"
 fi

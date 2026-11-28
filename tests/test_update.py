@@ -220,5 +220,22 @@ class UpdateTest(unittest.TestCase):
         self.assertNotIn("files/ufo", names)
 
 
+
+class PlayerUnitTest(unittest.TestCase):
+    """After a failed update without an installer, the TV player chosen with player.sh comes back."""
+
+    def test_the_browser_unless_native_is_chosen_and_installed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix, setting = Path(tmp) / "opt", Path(tmp) / "player"
+            self.assertEqual(update.player_unit(prefix, setting), "ufoscene-kiosk.service")
+            setting.write_text("native\n")
+            self.assertEqual(update.player_unit(prefix, setting), "ufoscene-kiosk.service")  # not installed
+            (prefix / "native").mkdir(parents=True)
+            (prefix / "native" / "ufo-native").write_bytes(b"")
+            self.assertEqual(update.player_unit(prefix, setting), "ufoscene-native.service")
+            setting.write_text("browser\n")
+            self.assertEqual(update.player_unit(prefix, setting), "ufoscene-kiosk.service")
+
+
 if __name__ == "__main__":
     unittest.main()
