@@ -231,7 +231,16 @@ class Updater:
         # no installer of its own (or it failed): put the files back and restart
         shutil.rmtree(self.prefix, ignore_errors=True)
         shutil.copytree(self.previous, self.prefix, symlinks=True)
-        subprocess.run(["systemctl", "restart", "ufoscene-server.service", "ufoscene-kiosk.service"], check=False)
+        subprocess.run(["systemctl", "restart", "ufoscene-server.service", player_unit(self.prefix)], check=False)
+
+
+def player_unit(prefix: Path, setting: Path = Path("/etc/ufoscene/player")) -> str:
+    """The unit that shows ufoscene on the TV: ufo-native when chosen (player.sh) and installed."""
+    try:
+        native = setting.read_text().strip().lower() == "native"
+    except OSError:
+        native = False
+    return "ufoscene-native.service" if native and (prefix / "native" / "ufo-native").is_file() else "ufoscene-kiosk.service"
 
 
 def main():

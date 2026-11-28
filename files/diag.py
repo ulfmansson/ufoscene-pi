@@ -26,7 +26,7 @@ from pathlib import Path
 
 SPEAKER = "UFOSCENE"
 UNITS = (
-    "ufoscene-server", "ufoscene-kiosk", "ufoscene-airplay", "ufoscene-phone", "ufoscene-wifi",
+    "ufoscene-server", "ufoscene-kiosk", "ufoscene-native", "ufoscene-airplay", "ufoscene-phone", "ufoscene-wifi",
     "avahi-daemon", "bluetooth", "NetworkManager",
 )
 AIRPLAY_PORTS = (5000, 7000)  # AirPlay 1 (RAOP) and AirPlay 2

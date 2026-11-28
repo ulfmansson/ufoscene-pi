@@ -200,7 +200,15 @@ const CHECKS = {
     },
   },
   demo: { label: 'Demo', f: () => ['info', d.tv?.demo ? `#${d.tv.demo}` : '–'] },
-  kiosk: { label: 'TV browser', f: () => svcCheck('ufoscene-kiosk', 'nothing on the TV') },
+  // the browser kiosk, or ufo-native (the player without a browser) when it is the one running
+  kiosk: {
+    label: 'TV player',
+    f: () => {
+      const native = ['active', 'activating'].includes(svc('ufoscene-native')?.active);
+      const [level, text] = svcCheck(native ? 'ufoscene-native' : 'ufoscene-kiosk', 'nothing on the TV');
+      return [level, `${native ? 'ufo-native' : 'Browser'}: ${text}`];
+    },
+  },
 
   // sound
   source: { label: 'Music from', f: () => ['info', SOURCES[d.tv?.audio] || d.tv?.audio || 'Unknown'] },
@@ -844,7 +852,7 @@ $('show-report').addEventListener('click', () => {
   ta.value = reportText();
   ta.hidden = !ta.hidden;
 });
-$('ssh-logs').textContent = 'journalctl -b -u ufoscene-kiosk -u ufoscene-server -u ufoscene-phone -u ufoscene-airplay -u ufoscene-wifi';
+$('ssh-logs').textContent = 'journalctl -b -u ufoscene-kiosk -u ufoscene-native -u ufoscene-server -u ufoscene-phone -u ufoscene-airplay -u ufoscene-wifi';
 $('ssh-sound').textContent = 'sudo -u ufo XDG_RUNTIME_DIR=/run/user/$(id -u ufo) pactl list short sinks';
 
 // ------------------------------------------------------------------ pages

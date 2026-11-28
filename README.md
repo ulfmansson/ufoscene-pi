@@ -75,6 +75,24 @@ ufoscene-update.service`, then `journalctl -u ufoscene-update` for what it did.
 A Pi on an older version (up to v0.2.0-rc6) has no updater yet: update it once by hand with the
 command above.
 
+### Without a browser
+
+The TV shows ufoscene in Chromium. Since v0.2.0 the Pi also has **ufo-native**, the same demos
+compiled for the Pi's CPU and drawn straight to the screen: a few MB of memory instead of
+Chromium's several hundred, which helps a Pi 2, 3 or Zero 2 W. The remote works the same; Spotify,
+Last.fm song names and artist photos are not in it yet. Over SSH:
+
+```bash
+sudo /opt/ufoscene/player.sh native
+```
+
+```bash
+sudo /opt/ufoscene/player.sh browser
+```
+
+The choice is kept in `/etc/ufoscene/player`, so the nightly update keeps it. A Pi 1 or Zero
+(ARMv6) has the browser only.
+
 ## Which Pi?
 
 The demos need about **25 frames per second** to look right. Press **Self-test** on the remote
@@ -159,6 +177,7 @@ setup network. Needs NetworkManager (Raspberry Pi OS Bookworm and later).
 | `files/www/tv.*` | the TV page. It runs ufoscene in a frame and presses its keys for the remote. |
 | `files/www/remote.*` | the phone remote |
 | `files/kiosk.sh`, `files/systemd/` | Chromium in kiosk mode under [cage](https://github.com/cage-kiosk/cage) on the TV |
+| `native/` in the bundle, `files/player.sh` | ufo-native, the player without a browser (built from ufoscene's `native/`), and the switch between it and the kiosk |
 | `files/phone.py`, `files/shairport-sync.conf` | the phone speaker: Bluetooth pairing and now-playing (BlueZ), AirPlay ([shairport-sync](https://github.com/mikebrady/shairport-sync)) |
 | `image/` | builds the SD-card images from Raspberry Pi OS Lite, plus the image list for Imager |
 
@@ -171,7 +190,7 @@ place: for a phone, the monitor of the TV output. ufoscene's microphone mode the
 Troubleshooting: open **🛠 Pi info & troubleshooting** on the remote first. Over SSH:
 
 ```bash
-journalctl -u ufoscene-kiosk -u ufoscene-server -u ufoscene-phone -u ufoscene-airplay -b
+journalctl -u ufoscene-kiosk -u ufoscene-native -u ufoscene-server -u ufoscene-phone -u ufoscene-airplay -b
 ```
 
 No sound? See where it goes (the HDMI one should be the default):
@@ -187,7 +206,9 @@ sudo -u ufo XDG_RUNTIME_DIR=/run/user/$(id -u ufo) pactl get-default-sink
 python3 -m unittest discover -s tests -v
 ```
 
-A tag `v*` builds the images on GitHub Actions and publishes a release.
+A tag `v*` builds the images on GitHub Actions and publishes a release. Every bundle carries both
+players: CI builds ufoscene's wasm and `native/build-pi.sh all`, and `image/make_bundle.sh` (with
+`REQUIRE_NATIVE=1`) refuses a bundle without the native binaries.
 
 ## Licence
 
