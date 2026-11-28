@@ -72,9 +72,11 @@ apt-get install -y -qq --no-install-recommends \
   pipewire pipewire-pulse wireplumber pulseaudio-utils libspa-0.2-bluetooth rtkit \
   bluez python3-dbus python3-gi shairport-sync \
   python3 python3-qrcode avahi-daemon libnss-mdns iw \
-  fonts-dejavu-core curl ca-certificates \
-  mpv
-# (mpv plays the radio for ufo-native, the player without a browser)
+  fonts-dejavu-core curl ca-certificates
+# mpv plays the radio for ufo-native, the player without a browser. It comes on its own: with
+# Chromium in the same call, apt ran out of memory working out the two together in the 32-bit
+# image build (armhf under qemu, std::bad_alloc), and so might a Pi with little memory.
+apt-get install -y -qq --no-install-recommends mpv
 # the Pi 3 and 4 radio needs Raspberry Pi's Bluetooth helper (already in Raspberry Pi OS)
 if apt-cache show pi-bluetooth >/dev/null 2>&1; then apt-get install -y -qq --no-install-recommends pi-bluetooth; fi
 # the Wi-Fi setup network: NetworkManager shares it with dnsmasq (Raspberry Pi OS since Bookworm)
